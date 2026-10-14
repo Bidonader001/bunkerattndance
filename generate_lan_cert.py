@@ -42,7 +42,7 @@ def main() -> None:
     names = [x509.DNSName("localhost")]
     for ip in ips:
         names.append(x509.IPAddress(ipaddress.ip_address(ip)))
-    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "ACCESS PASS LAN")])
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "ABSENCE LESS LAN")])
     now = datetime.now(timezone.utc)
     cert = (
         x509.CertificateBuilder()

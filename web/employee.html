@@ -2,21 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-  <title>Employee · ACCESS PASS</title>
-  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <title>Kiosk · Absence Less</title>
+  <link rel="icon" href="/assets/absence-mark.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css?v=46" />
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("access_pass_night") === "1") document.documentElement.classList.add("night");
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body class="kiosk" data-state="scanning">
   <header class="kiosk-bar">
-    <img src="/assets/logo.png" alt="ACCESS PASS" />
+    <img src="/assets/absence-mark.svg" alt="Absence Less" />
     <div class="kiosk-bar-right">
       <span id="kiosk-time" class="kiosk-time"></span>
+      <button type="button" class="ghost" id="btn-night" data-night-button aria-pressed="false">Night</button>
       <a href="/">Home</a>
     </div>
   </header>
@@ -46,7 +54,7 @@
     </div>
   </div>
   <canvas id="canvas" hidden></canvas>
-  <script src="/static/js/shared.js"></script>
-  <script src="/static/js/employee.js"></script>
+  <script src="/static/js/shared.js?v=26"></script>
+  <script src="/static/js/employee.js?v=25"></script>
 </body>
 </html>

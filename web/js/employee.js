@@ -12,6 +12,51 @@ let busy = false;
 let awaitingClear = false;
 let pendingOut = null;
 
+function kioskPayload(image_b64) {
+  const body = { image_b64 };
+  const mac = typeof getDeviceMac === "function" ? getDeviceMac() : "";
+  if (mac) body.device_mac = mac;
+  return JSON.stringify(body);
+}
+
+function rememberDevice(device) {
+  if (!device) return;
+  if (typeof setDeviceMac === "function" && device.mac_address && device.mac_resolved !== false) {
+    if (String(device.mac_address).indexOf("02:FF:") !== 0) setDeviceMac(device.mac_address);
+  }
+}
+
+function announceKiosk(cameraOn) {
+  const mac = typeof getDeviceMac === "function" ? getDeviceMac() : "";
+  fetch("/api/v1/devices/announce", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mac_address: mac, camera: !!cameraOn }),
+  })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      rememberDevice(data.device);
+    })
+    .catch(function () {});
+}
+
+function pushKioskPreview() {
+  if (!video || !video.videoWidth) return;
+  const image_b64 = frameToB64(canvas, video, 480, 0.55);
+  fetch("/api/v1/devices/preview", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image_b64: image_b64, camera: true }),
+  })
+    .then(function (res) { return res.json(); })
+    .then(function (data) {
+      rememberDevice(data.device);
+    })
+    .catch(function () {});
+}
+
 function setUi(label, title, detail, showOut) {
   stateLabel.textContent = label;
   hello.textContent = title;
@@ -29,9 +74,13 @@ async function tick() {
     const image_b64 = frameToB64(canvas, video);
     const result = await api("/identify", {
       method: "POST",
-      body: JSON.stringify({ image_b64 }),
+      body: kioskPayload(image_b64),
     });
 
+    if (result.status === "face_off") {
+      setUi("WAIT", "Face ID is off", result.message || "Turn Face ID on in the dashboard.", false);
+      return;
+    }
     if (result.status === "no_face") {
       awaitingClear = false;
       pendingOut = null;
@@ -53,7 +102,7 @@ async function tick() {
       setUi(
         "CLOCKED IN",
         `Hi ${result.name}`,
-        "Press CLOCK OUT when you are done. We will confirm your face first.",
+        "Press CLOCK OUT when your shift is done. We confirm your face first.",
         true
       );
       const sess = result.session || {};
@@ -65,11 +114,10 @@ async function tick() {
       return;
     }
 
-    if (result.already_this_shift) {
-      awaitingClear = false;
-      const shift = result.shift_name || "this";
-      setUi("DONE", `Hi ${result.name}`, `You already clocked in for the ${shift} shift.`, false);
-      meta.textContent = result.shift_name ? `SHIFT  ${result.shift_name}` : "";
+    if (result.cooldown) {
+      setUi("COOLDOWN", `Hi ${result.name}`, result.cooldown.message, false);
+      meta.textContent = "6 hours after clock-out";
+      awaitingClear = true;
       return;
     }
 
@@ -77,12 +125,12 @@ async function tick() {
 
     const punched = await api("/clock-in", {
       method: "POST",
-      body: JSON.stringify({ image_b64 }),
+      body: kioskPayload(image_b64),
     });
-    if (punched.action === "already_this_shift") {
+    if (punched.action === "cooldown") {
       speak(punched.message);
-      setUi("DONE", `Hi ${punched.name}`, punched.message, false);
-      meta.textContent = punched.shift_name ? `SHIFT  ${punched.shift_name}` : "";
+      setUi("COOLDOWN", `Hi ${punched.name}`, punched.message, false);
+      meta.textContent = "6 hours after clock-out";
       awaitingClear = true;
       return;
     }
@@ -109,7 +157,7 @@ btnOut.addEventListener("click", async () => {
     const image_b64 = frameToB64(canvas, video);
     const result = await api("/identify", {
       method: "POST",
-      body: JSON.stringify({ image_b64 }),
+      body: kioskPayload(image_b64),
     });
     if (result.status !== "matched") {
       setUi("NO FACE", "We need to see your face", "Look at the camera, then press CLOCK OUT again.", true);
@@ -140,7 +188,7 @@ document.getElementById("btn-confirm-out").addEventListener("click", async () =>
     const image_b64 = frameToB64(canvas, video);
     const result = await api("/clock-out", {
       method: "POST",
-      body: JSON.stringify({ image_b64 }),
+      body: kioskPayload(image_b64),
     });
     modal.classList.add("hidden");
     if (result.action === "clocked_out") {
@@ -164,9 +212,13 @@ async function bootCamera() {
     await startCamera(video);
     btnCam.classList.add("hidden");
     setUi("SCANNING", "Look at the camera", "You will be clocked in automatically.", false);
+    announceKiosk(true);
+    pushKioskPreview();
     if (!scanning) {
       scanning = true;
       setInterval(tick, 1600);
+      setInterval(function () { announceKiosk(true); }, 15000);
+      setInterval(pushKioskPreview, 800);
     }
   } catch (e) {
     btnCam.classList.remove("hidden");
@@ -175,6 +227,7 @@ async function bootCamera() {
 }
 
 btnCam.addEventListener("click", bootCamera);
+announceKiosk(false);
 bootCamera();
 
 function paintClock() {

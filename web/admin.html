@@ -3,127 +3,488 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Admin · ACCESS PASS</title>
-  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <title>Admin · Absence Less</title>
+  <link rel="icon" href="/assets/absence-mark.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css?v=46" />
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("access_pass_night") === "1") document.documentElement.classList.add("night");
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    html,body{margin:0;background:#ffffff;color:#171717;font-family:Inter,system-ui,"Segoe UI",sans-serif}
+    #login-screen.hidden,body.is-authed #login-screen{display:none !important}
+    #app-shell.hidden{display:none !important}
+    body.is-authed #app-shell,#app-shell{display:block !important;width:100%;height:auto;overflow:visible}
+    .sidebar{background:#fafafa;padding:16px;border-right:1px solid #e5e5e5}
+    .nav-btn{display:block;color:#171717;padding:10px 12px;text-decoration:none;border-radius:6px;font-size:14px;font-weight:500}
+    .nav-btn.active{background:#fff1ea;color:#be3700;box-shadow:none}
+    .content{display:block !important;overflow:visible !important;height:auto !important;min-height:240px;padding:16px;color:#171717}
+    .page{display:block;color:#171717;height:auto;overflow:visible}
+    .page[hidden]{display:none !important}
+    .page.active{display:block !important;visibility:visible !important}
+    .form-grid-3,.form-grid,.split{display:block !important}
+    label{display:block;margin:0 0 12px;color:#171717}
+    input,select,textarea{display:block;width:100%;background:#ffffff;color:#171717;border:1px solid #e5e5e5;border-radius:6px;box-sizing:border-box}
+    input,select{height:40px}
+    .viewfinder{position:relative;background:#171717;width:100%;max-width:640px;margin:12px 0}
+    .viewfinder video{display:block;width:100%;height:220px;background:#171717}
+    .cam-gate{display:block;width:100%;min-height:48px}
+    .hidden{display:none !important}
+    h1{color:#171717;font-weight:600;letter-spacing:-.04em}
+    .lede{color:#737373}
+    .card{background:#ffffff;border:1px solid #e5e5e5;margin:0 0 16px;padding:12px;border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+    button.primary{background:#be3700;color:#fffaf7;border:0;height:40px;padding:8px 16px;border-radius:6px;font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+    button.ghost,a.ghost{background:#ffffff;color:#171717;border:1px solid #e5e5e5;height:40px;padding:0 16px;border-radius:6px}
+    button.danger,button.ghost.danger,a.ghost.danger{background:#dc2626;border-color:#dc2626;color:#fafafa}
+    .hamburger{display:none;width:44px;height:44px;min-width:44px;margin:0;padding:10px;flex-direction:column;justify-content:center;gap:5px;background:#ffffff;border:1px solid #e5e5e5;border-radius:6px}
+    .hamburger span{display:block;height:2px;background:#be3700;border-radius:2px}
+    .sidebar-close{display:none}
+    @media (max-width:900px){
+      .hamburger{display:flex}
+      .sidebar-close{display:block;width:100%;margin:0 0 12px;background:transparent;color:#171717;border:1px solid #e5e5e5;height:44px;border-radius:6px}
+      #btn-sidebar-toggle{display:none !important}
+      body.is-authed .sidebar{
+        position:fixed !important;
+        top:0;bottom:0;
+        left:-320px !important;
+        width:280px !important;
+        max-width:86%;
+        z-index:120;
+        overflow-y:auto;
+        padding:16px !important;
+      }
+      body.nav-open .sidebar,body.is-authed.nav-open .sidebar{left:0 !important;z-index:130 !important}
+      body.nav-open .sidebar-backdrop{display:block !important;z-index:110 !important}
+      body.nav-open #app-shell,body.is-authed.nav-open #app-shell{z-index:auto !important}
+      body.is-authed .workspace,body.is-authed .content{margin-left:0 !important}
+      body.is-authed .sidebar .sidebar-brand{order:0}
+      body.is-authed .sidebar nav,body.is-authed .sidebar nav#console-nav{order:1;position:static;flex-direction:column;width:auto}
+      body.is-authed .sidebar .sidebar-foot{order:2;margin-top:auto}
+      .top-date,.top-user{display:none}
+    }
+    html.night,html.night body{background:#171717;color:#fafafa}
+    html.night .content,html.night .page,html.night h1{color:#fafafa}
+    html.night .lede,html.night label{color:#a3a3a3}
+    html.night .card{background:#262626;border-color:rgba(255,255,255,.1)}
+    html.night input,html.night select,html.night textarea{background:#171717;color:#fafafa;border-color:rgba(255,255,255,.15)}
+    html.night button.primary{background:#be3700;color:#fffaf7}
+    html.night button.ghost,html.night a.ghost{color:#fafafa;border-color:rgba(255,255,255,.1);background:#262626}
+    html.night button.danger,html.night button.ghost.danger{background:#dc2626;color:#fafafa;border-color:#dc2626}
+    html.night .hamburger{background:#262626;border-color:rgba(255,255,255,.1)}
+    html.night .hamburger span{background:#be3700}
+    html.night #export-dialog,html.night #help-dialog,html.night #correct-dialog{background:#262626;color:#fafafa;border-color:rgba(255,255,255,.1)}
+    html.night #export-dialog h2,html.night #export-dialog p,html.night #export-dialog label,html.night #export-dialog .muted,html.night #export-dialog .eyebrow,html.night #export-dialog .export-check,html.night #export-dialog #export-count{color:#fafafa}
+  </style>
 </head>
 <body>
   <div id="login-screen" class="login-screen">
-    <form id="login-form" class="login-card">
-      <img src="/assets/logo.png" alt="ACCESS PASS" />
-      <p class="eyebrow">Administration</p>
+    <div class="login-split">
+    <form id="login-form" class="login-card" method="post" action="/admin/session" autocomplete="on">
+      <img src="/assets/absence-mark.svg" alt="Absence Less" />
+      <p class="eyebrow">Absence Less administration</p>
       <h1>Sign in</h1>
-      <label>Username <input id="login-user" autocomplete="username" /></label>
-      <label>Password <input id="login-pass" type="password" autocomplete="current-password" /></label>
-      <button class="primary" type="submit">Enter console</button>
+      <label>Username <input id="login-user" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" /></label>
+      <label>Password <input id="login-pass" name="password" type="password" autocomplete="current-password" /></label>
+      <button class="primary" id="btn-login" type="submit">Enter console</button>
+      <button type="button" class="ghost" id="btn-login-night" data-night-button aria-pressed="false">Night</button>
       <p id="login-status" class="status"></p>
     </form>
+    <div class="login-hero">
+      <img src="/assets/absence-mark.svg" alt="Absence Less" />
+      <p>Smarter presence. In every moment.</p>
+    </div>
+    </div>
   </div>
 
+  <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
   <div id="app-shell" class="app-shell hidden">
-    <aside class="sidebar">
+    <aside class="sidebar" id="app-sidebar">
       <div class="sidebar-brand">
-        <img class="logo" src="/assets/logo.png" alt="ACCESS PASS" />
-        <button id="btn-logout" class="nav-btn sidebar-logout" type="button">Sign out</button>
+        <button type="button" class="nav-btn console-menu" id="btn-sidebar-toggle" aria-label="Collapse sidebar">Menu</button>
+        <button type="button" class="sidebar-close" id="btn-close-nav">Close</button>
+        <img class="logo" src="/assets/absence-mark.svg" alt="Absence Less" />
+        <p class="brand-name">Absence <span>Less</span></p>
+        <p class="sidebar-context" id="sidebar-company">Absence Less</p>
+        <p class="sidebar-context muted" id="sidebar-branch">Headquarters</p>
       </div>
-      <nav>
-        <button class="nav-btn active" data-page="register">Register</button>
-        <button class="nav-btn" data-page="people">People</button>
-        <button class="nav-btn" data-page="shifts">Shifts</button>
-        <button class="nav-btn" data-page="reports">Reports</button>
-        <button class="nav-btn super-only" data-page="admins" type="button">Admins</button>
+      <nav id="console-nav">
+        <a class="nav-btn" data-page="dashboard" href="/admin?page=dashboard"><span class="nav-ico" aria-hidden="true">▣</span> Overview</a>
+        <a class="nav-btn" data-page="people" href="/admin?page=people"><span class="nav-ico" aria-hidden="true">☰</span> Employees</a>
+        <a class="nav-btn" data-page="register" href="/admin?page=register"><span class="nav-ico" aria-hidden="true">◉</span> Enroll face</a>
+        <a class="nav-btn" data-page="attendance" href="/admin?page=attendance"><span class="nav-ico" aria-hidden="true">◷</span> Attendance</a>
+        <a class="nav-btn" data-page="shifts" href="/admin?page=shifts"><span class="nav-ico" aria-hidden="true">▤</span> Shifts &amp; Schedules</a>
+        <a class="nav-btn" data-page="reports" href="/admin?page=reports"><span class="nav-ico" aria-hidden="true">▧</span> Reports &amp; Analytics</a>
+        <a class="nav-btn" data-page="branches" href="/admin?page=branches"><span class="nav-ico" aria-hidden="true">⌂</span> Branches &amp; Departments</a>
+        <a class="nav-btn" data-page="devices" href="/admin?page=devices"><span class="nav-ico" aria-hidden="true">▣</span> Devices &amp; Kiosks</a>
+        <a class="nav-btn super-only" data-page="admins" href="/admin?page=admins"><span class="nav-ico" aria-hidden="true">⚙</span> Users &amp; Permissions</a>
+        <a class="nav-btn" data-page="integrations" href="/admin?page=integrations"><span class="nav-ico" aria-hidden="true">{ }</span> API &amp; Integrations</a>
+        <a class="nav-btn" data-page="notifications" href="/admin?page=notifications"><span class="nav-ico" aria-hidden="true">●</span> Notifications <span class="nav-badge" id="nav-alert-count" hidden>0</span></a>
+        <a class="nav-btn" data-page="settings" href="/admin?page=settings"><span class="nav-ico" aria-hidden="true">✦</span> Settings</a>
       </nav>
-      <a class="tagline" href="/employee">Open employee kiosk →</a>
+      <div class="sidebar-foot">
+        <div class="sidebar-user">
+          <span class="avatar" id="sidebar-avatar">A</span>
+          <div>
+            <strong id="sidebar-username">Admin</strong>
+            <p class="muted" id="sidebar-role">Administrator</p>
+          </div>
+        </div>
+        <a id="btn-logout" class="nav-btn sidebar-logout" href="/admin/logout">Sign out</a>
+        <a class="tagline" href="/kiosk">Open tablet kiosk →</a>
+      </div>
     </aside>
 
+    <div class="workspace">
+    <header class="topbar">
+      <button type="button" class="hamburger" id="btn-open-nav" aria-label="Open menu" aria-controls="app-sidebar" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="crumbs" id="top-crumbs" aria-label="Breadcrumb">Overview</nav>
+      <label class="top-search">Search
+        <input id="global-search" type="search" placeholder="Name, employee ID, email" />
+      </label>
+      <p class="top-date" id="top-date"></p>
+      <button type="button" class="ghost" id="btn-night" data-night-button aria-pressed="false">Night</button>
+      <button type="button" class="ghost" id="btn-help">Help</button>
+      <button type="button" class="ghost" id="btn-notify">Alerts <span class="badge" id="notify-count">0</span></button>
+      <div class="top-user" id="top-user">
+        <span class="avatar" id="top-avatar">A</span>
+        <div>
+          <strong id="top-username">Admin</strong>
+          <p class="muted" id="top-role">Administrator</p>
+        </div>
+      </div>
+    </header>
+
     <main class="content">
-      <section id="page-register" class="page active">
+      <p id="admin-flash" class="banner hidden"></p>
+      <p id="toast" class="toast hidden" role="status"></p>
+
+      <section id="page-dashboard" class="page active">
+        <div class="page-head">
+          <div>
+            <p class="eyebrow" id="dash-greet">Monitor</p>
+            <h1>Overview</h1>
+            <p class="lede">Live presence from registered tablets. Each kiosk is identified by its MAC address.</p>
+          </div>
+          <div class="page-filters card">
+            <label>Range
+              <select id="dash-range">
+                <option value="today">Today</option>
+                <option value="week">This week</option>
+                <option value="month">This month</option>
+                <option value="custom">Custom range</option>
+              </select>
+            </label>
+            <label class="hidden" id="dash-custom-wrap">From
+              <input id="dash-from" type="date" />
+            </label>
+            <label class="hidden" id="dash-custom-to-wrap">To
+              <input id="dash-to" type="date" />
+            </label>
+            <label>Branch
+              <select id="dash-branch"><option value="">All branches</option><option value="HQ">Headquarters</option></select>
+            </label>
+            <label>Department
+              <select id="dash-dept"><option value="">All departments</option></select>
+            </label>
+            <button type="button" class="primary" id="dash-export" data-export="monthly">Export</button>
+          </div>
+        </div>
+        <div id="dash-cards" class="stats-grid"></div>
+        <div class="split">
+          <div class="card pad">
+            <h2>Attendance analytics</h2>
+            <p class="muted">Check-ins for the last 7 days. Present, late, and open sessions are compared in the distribution.</p>
+            <div id="dash-week" class="week-bars"></div>
+          </div>
+          <div class="card pad">
+            <h2>Attendance distribution</h2>
+            <div id="dash-donut" class="donut-wrap"></div>
+          </div>
+        </div>
+        <div class="split">
+          <div class="card pad">
+            <h2>On site now</h2>
+            <div id="dash-onsite" class="log-list"></div>
+          </div>
+          <div class="card pad">
+            <h2>Recent attendance activity</h2>
+            <div id="dash-activity" class="table-wrap"></div>
+          </div>
+        </div>
+        <div class="split">
+          <div class="card pad">
+            <h2>Branch performance</h2>
+            <div id="dash-branches" class="table-wrap"></div>
+          </div>
+          <div class="card pad">
+            <h2>Device health</h2>
+            <div id="dash-devices" class="log-list"></div>
+          </div>
+        </div>
+        <div class="card pad">
+          <h2>Pending actions</h2>
+          <div id="dash-pending" class="log-list"></div>
+        </div>
+      </section>
+
+      <section id="page-register" class="page" hidden>
         <p class="eyebrow">Enrollment</p>
         <h1>Register employee</h1>
-        <p class="lede" id="register-lede">Five guided captures. At clock-in the shift is identified from time; hours still use actual clock in and out.</p>
-        <p id="edit-banner" class="banner hidden">Editing this person — save details, or recapture the face.</p>
+        <p class="lede" id="register-lede">Save details on any device. On a tablet, tap Start auto capture to allow the camera for Face ID.</p>
+        <p id="edit-banner" class="banner hidden">Editing this employee — save details, or recapture the face.</p>
 
-        <div class="card form-grid-3">
-          <label>
-            FULL NAME
-            <input id="enroll-name" type="text" placeholder="Employee name" />
-          </label>
-          <label>
-            EMPLOYEE ID
-            <input id="enroll-id" type="text" placeholder="Unique ID" />
-          </label>
-          <label>
-            USUAL SHIFT (OPTIONAL)
-            <select id="enroll-shift"></select>
-          </label>
-        </div>
+        <form id="enroll-form" method="post" action="/admin/do">
+          <input type="hidden" name="action" value="save_person" />
+          <input type="hidden" name="t" value="" />
+          <input type="hidden" name="editing_id" id="enroll-editing" value="" />
+          <div class="card form-grid-3" style="display:block;padding:16px">
+            <label>
+              FULL NAME
+              <input id="enroll-name" name="name" type="text" value="" placeholder="Employee name" required />
+            </label>
+            <label>
+              EMPLOYEE ID
+              <input id="enroll-id" name="employee_id" type="text" value="" placeholder="Unique ID" required />
+            </label>
+            <label>
+              EMAIL
+              <input id="enroll-email" name="email" type="email" value="" placeholder="name@company.com" />
+            </label>
+            <label>
+              PHONE
+              <input id="enroll-phone" name="phone" type="tel" value="" placeholder="05…" />
+            </label>
+            <label>
+              JOB TITLE
+              <input id="enroll-title" name="job_title" type="text" value="" placeholder="Role" />
+            </label>
+            <label>
+              DEPARTMENT
+              <input id="enroll-dept" name="department" type="text" value="" placeholder="Department" />
+            </label>
+            <label>
+              BRANCH
+              <input id="enroll-branch" name="branch" type="text" value="HQ" />
+            </label>
+            <label>
+              MANAGER
+              <input id="enroll-manager" name="manager" type="text" value="" />
+            </label>
+            <label>
+              EMPLOYMENT STATUS
+              <select id="enroll-status" name="employment_status">
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </label>
+            <label>
+              JOINING DATE
+              <input id="enroll-joined" name="joining_date" type="date" />
+            </label>
+            <label>
+              EMERGENCY CONTACT
+              <input id="enroll-em-name" name="emergency_name" type="text" value="" placeholder="Name" />
+            </label>
+            <label>
+              EMERGENCY PHONE
+              <input id="enroll-em-phone" name="emergency_phone" type="tel" value="" placeholder="Phone" />
+            </label>
+            <label>
+              USUAL SHIFT (OPTIONAL)
+              <select id="enroll-shift" name="shift_id"></select>
+            </label>
+          </div>
 
-        <div class="viewfinder">
-          <video id="enroll-video" autoplay playsinline muted webkit-playsinline></video>
-          <div class="corners"></div>
-          <div class="scan-line"></div>
-        </div>
+          <div class="viewfinder" id="enroll-finder">
+            <video id="enroll-video" autoplay playsinline muted webkit-playsinline style="display:block;width:100%;height:220px;background:#000"></video>
+            <div class="corners"></div>
+            <div class="scan-line"></div>
+            <button id="btn-enable-enroll-cam" class="cam-gate" type="button">Tap to start camera</button>
+          </div>
 
-        <div class="capture-row">
-          <div id="enroll-dots" class="dots"></div>
-          <span id="enroll-count" class="muted">0 / 5</span>
-          <span id="enroll-status" class="status"></span>
-        </div>
+          <div class="capture-row">
+            <div id="enroll-dots" class="dots"></div>
+            <span id="enroll-count" class="muted">0 / 5</span>
+            <span id="enroll-status" class="status"></span>
+          </div>
 
-        <div class="actions">
-          <button id="btn-auto" class="primary" type="button">Start auto capture</button>
-          <button id="btn-save-person" class="ghost hidden" type="button">Save details</button>
-          <button id="btn-cancel-edit" class="ghost hidden" type="button">Cancel edit</button>
-          <button id="btn-stop" class="ghost" type="button" disabled>Stop</button>
-        </div>
+          <div class="actions">
+            <button id="btn-auto" class="primary" type="button">Start auto capture</button>
+            <button id="btn-save-plain" class="ghost" type="submit">Save without Face ID</button>
+            <button id="btn-save-person" class="ghost hidden" type="submit">Save details</button>
+            <a id="btn-cancel-edit" class="ghost hidden" href="/admin?page=register">Cancel edit</a>
+            <button id="btn-stop" class="ghost" type="button" disabled>Stop</button>
+          </div>
+        </form>
         <p id="enroll-success" class="banner hidden">✓ EMPLOYEE REGISTERED</p>
       </section>
 
-      <section id="page-people" class="page">
+      <section id="page-people" class="page" hidden>
         <p class="eyebrow">Directory</p>
         <h1>Employees</h1>
-        <p class="lede">Edit name, ID, usual shift, or face. Deleting a person also removes their clock records.</p>
+        <p class="lede">Search, filter, and export. Face enrollment never exposes biometric templates.</p>
+        <div class="toolbar">
+          <label>Search
+            <input id="people-search" type="search" placeholder="Name, ID, or email" />
+          </label>
+          <label>Branch
+            <select id="people-branch"><option value="">All</option></select>
+          </label>
+          <label>Department
+            <select id="people-dept"><option value="">All</option></select>
+          </label>
+          <label>Shift
+            <select id="people-shift"><option value="">All</option></select>
+          </label>
+          <label>Face
+            <select id="people-face">
+              <option value="">All</option>
+              <option value="yes">Enrolled</option>
+              <option value="no">Not enrolled</option>
+            </select>
+          </label>
+          <label>Status
+            <select id="people-status-filter">
+              <option value="">All</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </label>
+          <a class="primary link-btn" href="/admin?page=register">Add employee</a>
+          <button type="button" class="ghost" id="btn-people-export" data-export="employees">Export</button>
+          <label class="file-label">Import CSV
+            <input id="people-import" type="file" accept=".csv,text/csv" />
+          </label>
+        </div>
         <p id="people-status" class="status"></p>
         <div class="table-wrap">
-          <table class="report-table">
+          <table class="report-table" id="people-table">
             <thead>
               <tr>
-                <th>Name</th>
                 <th>ID</th>
-                <th>Usual shift</th>
+                <th>Name</th>
+                <th>Department</th>
+                <th>Branch</th>
+                <th>Shift</th>
+                <th>Face</th>
+                <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody id="people-body"></tbody>
           </table>
         </div>
+        <div class="pager" id="people-pager"></div>
       </section>
 
-      <section id="page-shifts" class="page">
-        <p class="eyebrow">Schedule</p>
-        <h1>Static shifts</h1>
-        <p class="lede">Clock-in auto-assigns the matching window. After midnight stays the same work date.</p>
-        <div class="card form-grid-3">
-          <label>NAME <input id="shift-name" placeholder="Night" /></label>
-          <label>START <input id="shift-start" type="time" value="20:00" /></label>
-          <label>END <input id="shift-end" type="time" value="04:00" /></label>
+      <section id="page-attendance" class="page" hidden>
+        <p class="eyebrow">Timekeeping</p>
+        <h1>Attendance</h1>
+        <p class="lede">Original clock events are never overwritten. Corrections require a reason and stay in the audit log.</p>
+        <div class="toolbar">
+          <label>Date
+            <input id="att-date" type="date" />
+          </label>
+          <label>Employee
+            <input id="att-name" type="search" placeholder="Name" />
+          </label>
+          <label>Status
+            <select id="att-status">
+              <option value="">All</option>
+              <option>Present</option>
+              <option>Late</option>
+              <option>Missing Check-out</option>
+            </select>
+          </label>
+          <button type="button" class="primary" id="btn-att-load">Apply filters</button>
+          <button type="button" class="ghost" id="btn-att-export" data-export="daily">Export</button>
+          <a class="ghost link-btn" href="/admin?page=reports">Timesheet reports</a>
         </div>
-        <button id="btn-add-shift" class="primary" type="button">Add shift</button>
+        <p id="att-status-msg" class="status"></p>
+        <div class="table-wrap">
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>ID</th>
+                <th>Date</th>
+                <th>Check-in</th>
+                <th>Check-out</th>
+                <th>Hours</th>
+                <th>Late</th>
+                <th>Status</th>
+                <th>Device</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="att-body"></tbody>
+          </table>
+        </div>
+        <div class="card pad">
+          <h2>Correction requests</h2>
+          <p class="muted">Approved or rejected here. The original session times stay as captured by the kiosk.</p>
+          <div class="table-wrap">
+            <table class="report-table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>Employee</th>
+                  <th>Field</th>
+                  <th>Old</th>
+                  <th>Proposed</th>
+                  <th>Reason</th>
+                  <th>Actor</th>
+                  <th>Status</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="att-audit-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-shifts" class="page" hidden>
+        <p class="eyebrow">Schedule</p>
+        <h1>Shifts &amp; schedules</h1>
+        <p class="lede">Clock-in auto-assigns the matching window. After midnight stays the same work date. Overnight shifts are supported.</p>
+        <form method="post" action="/admin/do" class="card form-grid-3">
+          <input type="hidden" name="action" value="add_shift" />
+          <input type="hidden" name="t" value="" />
+          <label>NAME <input id="shift-name" name="shift_name" placeholder="Night" required /></label>
+          <label>START <input id="shift-start" name="start_time" type="time" value="20:00" required /></label>
+          <label>END <input id="shift-end" name="end_time" type="time" value="04:00" required /></label>
+          <div class="actions report-actions">
+            <button id="btn-add-shift" class="primary" type="submit">Add shift</button>
+          </div>
+        </form>
         <p id="shift-status" class="status"></p>
         <div id="shift-list" class="log-list"></div>
+        <div class="card pad">
+          <h2>Weekly calendar</h2>
+          <p class="muted">Templates below drive live assignment. Grace, overtime, and rest-day policy are stored in Settings.</p>
+          <div id="shift-calendar" class="week-cal"></div>
+        </div>
       </section>
 
-      <section id="page-reports" class="page">
+      <section id="page-reports" class="page" hidden>
         <p class="eyebrow">Attendance</p>
-        <h1>Hours report</h1>
-        <p class="lede">Daily, weekly, or monthly. Under 8h red · 8h green · over 8h purple. Late is flagged; hours are still actual time worked.</p>
-        <div class="card form-grid-3">
+        <h1>Reports &amp; analytics</h1>
+        <p class="lede">Daily, weekly, or monthly hours. Monthly includes average working hours per employee. Raw duration is not payroll until Settings policies are applied. Export PDF or Excel.</p>
+        <form method="get" action="/admin" class="card form-grid-3" id="report-form">
+          <input type="hidden" name="page" value="reports" />
+          <input type="hidden" name="t" value="" />
           <label>
             PERIOD
-            <select id="report-period">
+            <select id="report-period" name="period">
               <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
@@ -131,14 +492,44 @@
           </label>
           <label>
             DATE
-            <input id="report-date" type="date" />
+            <input id="report-date" name="work_date" type="date" />
           </label>
           <div class="actions report-actions">
+            <button class="primary" type="submit">Show report</button>
+            <button type="button" class="ghost" id="btn-reports-export" data-export="monthly">Export</button>
             <a id="btn-pdf" class="primary link-btn" href="#">PDF</a>
             <a id="btn-xlsx" class="ghost link-btn" href="#">EXCEL</a>
           </div>
+        </form>
+        <div class="report-links">
+          <button type="button" class="ghost" data-report="daily">Daily attendance</button>
+          <button type="button" class="ghost" data-report="monthly">Monthly attendance</button>
+          <button type="button" class="ghost" data-report="late">Late arrivals</button>
+          <button type="button" class="ghost" data-report="absence">Absences</button>
+          <button type="button" class="ghost" data-report="missing">Missing check-outs</button>
         </div>
         <p id="report-range" class="muted"></p>
+        <div id="report-summary" class="stats-grid"></div>
+        <div id="report-avg-wrap" class="hidden">
+          <h2>Monthly averages</h2>
+          <p class="lede">Average hours = total hours ÷ days worked in this month. Not payroll hours.</p>
+          <div class="table-wrap">
+            <table class="report-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>ID</th>
+                  <th>Days worked</th>
+                  <th>Sessions</th>
+                  <th>Total hours</th>
+                  <th>Avg hours / day</th>
+                </tr>
+              </thead>
+              <tbody id="report-avg-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <h2>Session log</h2>
         <div class="table-wrap">
           <table class="report-table">
             <thead>
@@ -146,8 +537,8 @@
                 <th>Name</th>
                 <th>ID</th>
                 <th>Shift</th>
-                <th>Clock in</th>
-                <th>Clock out</th>
+                <th>In</th>
+                <th>Out</th>
                 <th>Total hours</th>
                 <th>Late</th>
               </tr>
@@ -157,18 +548,85 @@
         </div>
       </section>
 
-      <section id="page-admins" class="page">
-        <p class="eyebrow">Super admin</p>
-        <h1>Admins</h1>
-        <p class="lede">You can create up to three admins. They can enroll people, manage shifts, and run reports. Only you can add them or change their passwords.</p>
-        <p id="admin-quota" class="muted"></p>
-        <div class="card form-grid-3">
-          <label>USERNAME <input id="staff-user" autocomplete="off" /></label>
-          <label>PASSWORD <input id="staff-pass" type="password" autocomplete="new-password" /></label>
-          <div class="actions report-actions">
-            <button id="btn-add-admin" class="primary" type="button">Add admin</button>
+      <section id="page-branches" class="page" hidden>
+        <p class="eyebrow">Organization</p>
+        <h1>Branches &amp; departments</h1>
+        <div id="branches-panel"></div>
+      </section>
+
+      <section id="page-devices" class="page" hidden>
+        <p class="eyebrow">Hardware</p>
+        <h1>Devices &amp; kiosks</h1>
+        <p class="lede">When a tablet opens /kiosk it appears here. Edit its name, remove it, or watch the live camera. A removed tablet that opens the kiosk again shows up as a new device.</p>
+        <p id="device-this" class="banner hidden"></p>
+        <p id="device-new" class="source-banner hidden"></p>
+        <div class="split">
+          <div class="card pad">
+            <h2>Live from tablet</h2>
+            <p id="device-watch-meta" class="muted">Waiting for a kiosk at /kiosk…</p>
+            <div class="viewfinder" id="device-finder">
+              <img id="device-live" alt="Tablet live camera" style="display:block;width:100%;height:240px;object-fit:cover;background:#000" />
+            </div>
+            <p id="device-cam-status" class="status"></p>
+            <div class="actions">
+              <a class="primary link-btn" href="/kiosk">Open attendance kiosk</a>
+            </div>
           </div>
+          <form id="device-form" class="card form-grid">
+            <h2 class="span-all">Edit selected kiosk</h2>
+            <input type="hidden" id="device-id" />
+            <label>Device name
+              <input id="device-name" name="name" placeholder="Entrance tablet" />
+            </label>
+            <label>MAC address
+              <input id="device-mac" name="mac_address" readonly placeholder="Captured automatically" />
+            </label>
+            <label>IP address
+              <input id="device-ip" name="last_ip" readonly placeholder="Captured automatically" />
+            </label>
+            <label>Location
+              <input id="device-location" name="location" placeholder="Lobby / Door 1" />
+            </label>
+            <div class="actions span-all">
+              <button class="primary" type="submit">Save</button>
+              <button class="ghost hidden" id="btn-device-restore" type="button">Restore</button>
+              <button class="ghost danger" id="btn-device-remove" type="button">Remove</button>
+            </div>
+            <p id="device-form-status" class="status span-all"></p>
+          </form>
         </div>
+        <div class="table-wrap">
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>IP</th>
+                <th>MAC address</th>
+                <th>Camera</th>
+                <th>Status</th>
+                <th>Last seen</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="devices-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="page-admins" class="page" hidden>
+        <p class="eyebrow">Access</p>
+        <h1>Users &amp; permissions</h1>
+        <p class="lede">You can create up to three admins. They can register members, manage hours, and view visits. Only the company owner can add them or change their passwords. Hiding a button is not a security mechanism — these actions are enforced on the server.</p>
+        <p id="admin-quota" class="muted"></p>
+        <form method="post" action="/admin/do" class="card form-grid-3">
+          <input type="hidden" name="action" value="add_admin" />
+          <input type="hidden" name="t" value="" />
+          <label>USERNAME <input id="staff-user" name="staff_username" autocomplete="off" required /></label>
+          <label>PASSWORD <input id="staff-pass" name="staff_password" type="password" autocomplete="new-password" required /></label>
+          <div class="actions report-actions">
+            <button id="btn-add-admin" class="primary" type="submit">Invite admin</button>
+          </div>
+        </form>
         <p id="staff-status" class="status"></p>
         <div class="table-wrap">
           <table class="report-table">
@@ -182,18 +640,222 @@
             <tbody id="staff-body"></tbody>
           </table>
         </div>
+        <div class="card pad">
+          <h2>Default roles</h2>
+          <p class="muted">Company Owner (super) and HR Administrator are live. Branch Manager, Supervisor, and Read-only Auditor are planned and not yet persisted.</p>
+        </div>
         <h2 class="staff-own">Your password</h2>
-        <div class="card form-grid">
-          <label>NEW PASSWORD <input id="super-pass" type="password" autocomplete="new-password" /></label>
+        <form method="post" action="/admin/do" class="card form-grid">
+          <input type="hidden" name="action" value="super_password" />
+          <input type="hidden" name="t" value="" />
+          <label>NEW PASSWORD <input id="super-pass" name="new_password" type="password" autocomplete="new-password" required /></label>
           <div class="actions report-actions">
-            <button id="btn-super-pass" class="ghost" type="button">Update my password</button>
+            <button id="btn-super-pass" class="ghost" type="submit">Update my password</button>
           </div>
+        </form>
+      </section>
+
+      <section id="page-integrations" class="page" hidden>
+        <p class="eyebrow">Developers</p>
+        <h1>API &amp; integrations</h1>
+        <p class="lede">Public API scopes will be employees:read, employees:write, and attendance:read. Biometric templates are never exposed. Secrets are shown only once at creation.</p>
+        <div id="integrations-panel"></div>
+      </section>
+
+      <section id="page-notifications" class="page" hidden>
+        <p class="eyebrow">Alerts</p>
+        <h1>Notifications</h1>
+        <div class="toolbar">
+          <label>Type
+            <select id="notify-filter">
+              <option value="">All</option>
+              <option value="late">Late arrivals</option>
+              <option value="missing_checkout">Missing check-outs</option>
+              <option value="correction">Corrections</option>
+            </select>
+          </label>
+        </div>
+        <div id="notify-list" class="log-list"></div>
+      </section>
+
+      <section id="page-settings" class="page" hidden>
+        <p class="eyebrow">Workspace</p>
+        <h1>Settings</h1>
+        <div class="card pad">
+          <h2>Appearance</h2>
+          <label class="face-toggle">Night mode
+            <input id="set-night" type="checkbox" data-night-toggle />
+          </label>
+          <p class="muted">Dark screens on this device — admin, login, and the tablet kiosk. Each device keeps its own setting.</p>
+        </div>
+        <form id="settings-form" class="card form-grid-3">
+          <h2 class="span-all">Company</h2>
+          <label>Company name <input id="set-company" name="company_name" /></label>
+          <label>Timezone <input id="set-tz" name="timezone" /></label>
+          <label>Working days <input id="set-days" name="working_days" /></label>
+          <label>Contact <input id="set-contact" name="contact" /></label>
+          <h2 class="span-all">Attendance</h2>
+          <label>Grace period (minutes) <input id="set-grace" name="grace_minutes" /></label>
+          <label>Duplicate-scan window (seconds) <input id="set-dup" name="duplicate_scan_seconds" /></label>
+          <label>Overtime policy
+            <textarea id="set-ot" name="overtime_policy" rows="3"></textarea>
+          </label>
+          <label class="face-toggle">Face premium
+            <input id="set-face" type="checkbox" />
+          </label>
+          <div class="actions span-all">
+            <button class="primary" type="submit">Save settings</button>
+          </div>
+          <p id="settings-status" class="status span-all"></p>
+        </form>
+        <div class="card pad">
+          <h2>Recognition, security, subscription</h2>
+          <div id="settings-preview"></div>
         </div>
       </section>
     </main>
+    </div>
   </div>
+
+  <dialog id="export-dialog" class="modal-card export-dialog">
+    <h2>Export</h2>
+    <p class="muted">Downloads a file from live attendance data. Hours are elapsed check-in to check-out time, not payroll.</p>
+    <form id="export-form">
+      <div class="form-grid-3">
+        <label>Report type
+          <select id="export-report">
+            <option value="daily">Daily Attendance</option>
+            <option value="monthly">Monthly Attendance</option>
+            <option value="employees">Employee Directory</option>
+            <option value="late">Late Arrivals</option>
+            <option value="absences">Absences</option>
+            <option value="hours">Working Hours and Overtime</option>
+          </select>
+        </label>
+        <label>File format
+          <select id="export-format">
+            <option value="xlsx">Excel Workbook (.xlsx)</option>
+            <option value="csv">CSV (.csv)</option>
+            <option value="pdf">PDF (.pdf)</option>
+          </select>
+        </label>
+        <label>Attendance status
+          <select id="export-status">
+            <option value="">All</option>
+            <option value="Present">Present</option>
+            <option value="Late">Late</option>
+            <option value="Absent">Absent</option>
+            <option value="Incomplete">Incomplete</option>
+            <option value="On Leave">On Leave</option>
+          </select>
+        </label>
+        <label>Start date
+          <input id="export-start" type="date" required />
+        </label>
+        <label>End date
+          <input id="export-end" type="date" required />
+        </label>
+        <label>Branch
+          <select id="export-branch"><option value="">All branches</option></select>
+        </label>
+        <label>Department
+          <select id="export-dept"><option value="">All departments</option></select>
+        </label>
+        <label>Employee
+          <select id="export-employee"><option value="">All employees</option></select>
+        </label>
+        <label class="export-check span-all">
+          <input id="export-inactive" type="checkbox" />
+          Include deactivated employees
+        </label>
+      </div>
+      <p class="eyebrow">Columns</p>
+      <div class="actions">
+        <button type="button" class="ghost" id="export-cols-all">Select all</button>
+        <button type="button" class="ghost" id="export-cols-reset">Reset to default</button>
+      </div>
+      <div id="export-cols" class="export-cols"></div>
+      <p id="export-count" class="muted">Select filters to estimate records.</p>
+      <p id="export-error" class="status" hidden></p>
+      <div class="actions">
+        <button class="primary" type="submit" id="export-submit">Download</button>
+        <button class="ghost" type="button" id="export-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="help-dialog" class="modal-card">
+    <h2>Absence Less help</h2>
+    <p>Use Enroll face to capture Face ID. Register each kiosk on Devices &amp; Kiosks with its MAC address, then open /kiosk. Corrections never replace the original scan.</p>
+    <p><a href="/kiosk">Open tablet kiosk</a></p>
+    <form method="dialog"><button class="primary" type="submit">Close</button></form>
+  </dialog>
+  <dialog id="correct-dialog" class="modal-card">
+    <h2>Correct attendance</h2>
+    <p class="muted">The original event stays. This stores a proposed change with your name, the time, and the reason.</p>
+    <form id="correct-form">
+      <input type="hidden" id="correct-id" />
+      <label>Field
+        <select id="correct-field">
+          <option value="clock_in">Check-in</option>
+          <option value="clock_out">Check-out</option>
+        </select>
+      </label>
+      <label>New value
+        <input id="correct-value" type="datetime-local" required />
+      </label>
+      <label>Explanation
+        <textarea id="correct-reason" required rows="3"></textarea>
+      </label>
+      <div class="actions">
+        <button class="primary" type="submit">Submit request</button>
+        <button class="ghost" type="button" id="correct-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
   <canvas id="work-canvas" hidden></canvas>
-  <script src="/static/js/shared.js"></script>
-  <script src="/static/js/admin.js"></script>
+  <script src="/static/js/shared.js?v=26"></script>
+  <script src="/static/js/admin.js?v=26"></script>
+  <script src="/static/js/codai-console.js?v=35"></script>
+  <script>
+    (function () {
+      var pages = document.querySelectorAll(".page");
+      var page = "dashboard";
+      var match = (window.location.search || "").match(/[?&]page=([^&]+)/);
+      if (match) {
+        try { page = decodeURIComponent(match[1]); } catch (e) { page = match[1]; }
+      }
+      var i, p, on, id;
+      for (i = 0; i < pages.length; i++) {
+        p = pages[i];
+        id = p.id || "";
+        on = id === "page-" + page;
+        if (on) {
+          p.className = "page active";
+          p.removeAttribute("hidden");
+          p.style.display = "block";
+          p.style.visibility = "visible";
+        } else {
+          p.className = "page";
+          p.setAttribute("hidden", "hidden");
+          p.style.display = "none";
+        }
+      }
+      var shell = document.getElementById("app-shell");
+      var login = document.getElementById("login-screen");
+      if (document.body.className.indexOf("is-authed") !== -1) {
+        if (login) {
+          login.className = "login-screen hidden";
+          login.style.display = "none";
+          login.setAttribute("hidden", "hidden");
+        }
+        if (shell) {
+          shell.className = "app-shell";
+          shell.removeAttribute("hidden");
+          shell.style.display = "block";
+        }
+      }
+    })();
+  </script>
 </body>
 </html>

@@ -3,32 +3,64 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>ACCESS PASS</title>
-  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <title>Absence Less</title>
+  <link rel="icon" href="/assets/absence-mark.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css?v=46" />
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("access_pass_night") === "1") document.documentElement.classList.add("night");
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body class="landing-body">
   <div class="landing">
-    <img class="landing-logo" src="/assets/logo.png" alt="ACCESS PASS" />
-    <p class="landing-kicker">Facial attendance for the floor — fast, quiet, and accurate.</p>
-    <div class="landing-grid">
-      <a class="landing-card" href="/employee">
-        <span class="eyebrow">Employee kiosk</span>
-        <strong>Clock in</strong>
-        <p>Look at the camera. ACCESS PASS recognizes you, assigns the shift, and records the time.</p>
-        <span class="go">Open kiosk →</span>
+    <section class="landing-hero">
+      <div class="landing-copy">
+        <p class="eyebrow">Absence Less</p>
+        <h1 class="brand-name">Absence <span>Less</span></h1>
+        <p class="landing-kicker">Smarter presence. In every moment. Face clock-in on the tablet, live attendance in the console.</p>
+        <div class="landing-cta">
+          <a class="primary link-btn" href="/kiosk">Open kiosk</a>
+          <a class="ghost link-btn" href="/admin">Open console</a>
+        </div>
+      </div>
+      <div class="landing-visual">
+        <img class="landing-logo" src="/assets/absence-mark.svg" alt="" />
+        <p class="landing-visual-cap">Look at the camera. Clock-in is automatic.</p>
+      </div>
+    </section>
+    <section class="landing-feature">
+      <a class="landing-feature-copy" href="/kiosk">
+        <span class="eyebrow">Tablet kiosk</span>
+        <strong>Clock in / out</strong>
+        <p>Employees look at the camera. Absence Less recognizes them and records clock-in. Clock-out is a confirmed button on the kiosk.</p>
+        <span class="go">Open kiosk</span>
       </a>
-      <a class="landing-card" href="/admin">
-        <span class="eyebrow">Administration</span>
-        <strong>Manage</strong>
-        <p>Enroll people, set shifts, and export daily, weekly, or monthly hours.</p>
-        <span class="go">Open console →</span>
+      <div class="landing-feature-panel">
+        <p class="eyebrow">On the floor</p>
+        <strong>One face, one punch</strong>
+        <p>Tablets announce themselves by MAC address so the console can name, edit, or remove each kiosk.</p>
+      </div>
+    </section>
+    <section class="landing-feature is-flip">
+      <a class="landing-feature-copy" href="/admin">
+        <span class="eyebrow">Admin</span>
+        <strong>Dashboard</strong>
+        <p>Register employees, set shifts, watch live attendance, and export PDF or Excel.</p>
+        <span class="go">Open console</span>
       </a>
-    </div>
-    <p class="landing-foot">Secure on-device recognition</p>
+      <div class="landing-feature-panel">
+        <p class="eyebrow">In the office</p>
+        <strong>People, shifts, reports</strong>
+        <p>Enrollment, late marks, and exports stay on this machine. Night mode is optional.</p>
+      </div>
+    </section>
+    <p class="landing-foot">Absence Less</p>
   </div>
 </body>
 </html>
