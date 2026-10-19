@@ -22,6 +22,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from core import db
+from core.reports import attach_salary
 from core.time_utils import hours_between
 
 MAX_DAYS = 366
@@ -41,7 +42,7 @@ DETAIL_DEFAULT = [
 DETAIL_ALL = DETAIL_DEFAULT + ["shift", "department", "branch", "late_minutes", "device"]
 DIRECTORY_DEFAULT = ["employee_id", "name", "email", "department", "branch", "shift", "face", "status"]
 DIRECTORY_ALL = DIRECTORY_DEFAULT + ["phone", "job_title", "joining_date"]
-SUMMARY_HEADERS = ["Employee", "Days present", "Late arrivals", "Absences", "Total hours"]
+SUMMARY_HEADERS = ["Employee", "Days present", "Late arrivals", "Absences", "Total hours", "Base salary", "Net pay"]
 
 INK = PatternFill("solid", fgColor="001F3F")
 CREAM = PatternFill("solid", fgColor="FFFFFF")
@@ -348,6 +349,7 @@ def collect(params: dict) -> dict:
                 "total_hours": float(total),
             }
         )
+    attach_salary(summary, start.isoformat(), end.isoformat(), employee_id=employee_id)
 
     if report == "absences":
         if status_filter and status_filter.lower() != "absent":
@@ -381,9 +383,9 @@ def collect(params: dict) -> dict:
         "summary": summary,
         "directory": directory,
         "grace": grace,
-        "company": _setting("company_name", "Absence Less") or "Absence Less",
+        "company": _setting("company_name", "Bunker Attendance") or "Bunker Attendance",
         "working_days": _setting("working_days", "Sun-Thu"),
-        "hours_note": "Total hours are elapsed check-in to check-out time, not payroll hours.",
+        "hours_note": "Hours are elapsed check-in to check-out. Salary is calculated from payroll settings for this range.",
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "branch": branch or "All branches",
         "department": department or "All departments",
@@ -437,7 +439,7 @@ def _detail_value(row: dict, key: str):
 def filename_for(report: str, fmt: str, start: date, end: date) -> str:
     if report == "employees":
         stamp = date.today().isoformat()
-        return f"AbsenceLess_Employees_{stamp}.{fmt}"
+        return f"BunkerAttendance_Employees_{stamp}.{fmt}"
     if report == "monthly" and start.month == end.month and start.year == end.year:
         stamp = start.strftime("%Y-%m")
     else:
@@ -451,8 +453,8 @@ def filename_for(report: str, fmt: str, start: date, end: date) -> str:
     }
     prefix = names.get(report, "Attendance")
     if fmt == "pdf" and report in {"monthly", "daily", "hours"}:
-        return f"AbsenceLess_Attendance_Summary_{stamp}.pdf"
-    return f"AbsenceLess_{prefix}_{stamp}.{fmt}"
+        return f"BunkerAttendance_Attendance_Summary_{stamp}.pdf"
+    return f"BunkerAttendance_{prefix}_{stamp}.{fmt}"
 
 
 def media_type(fmt: str) -> str:
@@ -521,7 +523,7 @@ def build(params: dict, actor: str) -> tuple[bytes, str, str]:
 
 def _banner(ws, data: dict, title: str, width: int) -> int:
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=width)
-    ws["A1"] = "Absence Less"
+    ws["A1"] = "Bunker Attendance"
     ws["A1"].font = TITLE_FONT
     ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=width)
     ws["A2"] = title
@@ -635,11 +637,13 @@ def _excel(data: dict, cols: list[str]) -> bytes:
 
         if report in {"monthly", "daily", "hours"}:
             sm = wb.create_sheet("Employee Summary")
-            sh = _banner(sm, data, "Employee Summary — elapsed hours, not payroll", 5)
+            sh = _banner(sm, data, "Employee Summary — hours and calculated salary", 7)
             for idx, label in enumerate(SUMMARY_HEADERS, start=1):
                 sm.cell(sh, idx, label)
             total_present = total_late = total_abs = Decimal("0")
             total_hours = Decimal("0.00")
+            total_base = Decimal("0.00")
+            total_net = Decimal("0.00")
             for item in data["summary"]:
                 sm.append(
                     [
@@ -648,29 +652,37 @@ def _excel(data: dict, cols: list[str]) -> bytes:
                         item["late_arrivals"],
                         item["absences"],
                         item["total_hours"],
+                        float(item.get("base_salary") or 0),
+                        float(item.get("net_pay") or 0),
                     ]
                 )
                 total_present += item["days_present"]
                 total_late += item["late_arrivals"]
                 total_abs += item["absences"]
                 total_hours += Decimal(str(item["total_hours"]))
-            sm.append(["Total", int(total_present), int(total_late), int(total_abs), float(total_hours)])
+                total_base += Decimal(str(item.get("base_salary") or 0))
+                total_net += Decimal(str(item.get("net_pay") or 0))
+            sm.append(
+                ["Total", int(total_present), int(total_late), int(total_abs), float(total_hours), float(total_base), float(total_net)]
+            )
             last_s = sm.max_row
             for r in range(sh, last_s + 1):
-                for c in range(1, 6):
+                for c in range(1, 8):
                     cell = sm.cell(r, c)
                     cell.border = THIN
                     if r > sh and r % 2 == 0 and r < last_s:
                         cell.fill = ZEBRA
                 if r > sh:
                     sm.cell(r, 5).number_format = "0.00"
-            for c in range(1, 6):
+                    sm.cell(r, 6).number_format = "0.00"
+                    sm.cell(r, 7).number_format = "0.00"
+            for c in range(1, 8):
                 sm.cell(last_s, c).font = Font(bold=True)
                 sm.cell(last_s, c).fill = CREAM
-            _style_header(sm, sh, 5)
-            sm.auto_filter.ref = f"A{sh}:E{max(last_s - 1, sh)}"
+            _style_header(sm, sh, 7)
+            sm.auto_filter.ref = f"A{sh}:G{max(last_s - 1, sh)}"
             sm.column_dimensions["A"].width = 28
-            for col in "BCDE":
+            for col in "BCDEFG":
                 sm.column_dimensions[col].width = 16
             sm["A6"] = "Hours note"
             sm["B6"] = data["hours_note"]
@@ -755,7 +767,7 @@ def _pdf(data: dict, cols: list[str]) -> bytes:
     doc = SimpleDocTemplate(
         buf,
         pagesize=landscape(A4),
-        title=f"Absence Less {_title(data['report'])}",
+        title=f"Bunker Attendance {_title(data['report'])}",
         leftMargin=24,
         rightMargin=24,
         topMargin=28,
@@ -773,12 +785,12 @@ def _pdf(data: dict, cols: list[str]) -> bytes:
         canvas.saveState()
         canvas.setFillColor(PDF_INK)
         canvas.setFont(font, 8)
-        canvas.drawString(24, 16, f"Absence Less · {data['generated_at'].replace('T', ' ')}")
+        canvas.drawString(24, 16, f"Bunker Attendance · {data['generated_at'].replace('T', ' ')}")
         canvas.drawRightString(landscape(A4)[0] - 24, 16, f"Page {doc_.page}")
         canvas.restoreState()
 
     story = [
-        Paragraph("Absence Less", title),
+        Paragraph("Bunker Attendance", title),
         Paragraph(_shape(_title(data["report"])), heading),
         Paragraph(
             _shape(
@@ -854,6 +866,8 @@ def _pdf(data: dict, cols: list[str]) -> bytes:
                     str(item["late_arrivals"]),
                     str(item["absences"]),
                     f"{item['total_hours']:.2f}",
+                    str(item.get("base_salary") or "0.00"),
+                    str(item.get("net_pay") or "0.00"),
                 ]
             )
         st = Table(sm, repeatRows=1)

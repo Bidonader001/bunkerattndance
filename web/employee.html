@@ -5,27 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black" />
-  <title>Kiosk · Absence Less</title>
-  <link rel="icon" href="/assets/absence-mark.svg" type="image/svg+xml" />
+  <title>Kiosk · Bunker Attendance</title>
+  <link rel="icon" href="/assets/bnkr-mark.jpg" type="image/jpeg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=46" />
-  <script>
-    (function () {
-      try {
-        if (localStorage.getItem("access_pass_night") === "1") document.documentElement.classList.add("night");
-      } catch (e) {}
-    })();
-  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css?v=53" />
 </head>
 <body class="kiosk" data-state="scanning">
+  <div class="kiosk-gridbg" aria-hidden="true"></div>
+  <div class="kiosk-scanlines" aria-hidden="true"></div>
   <header class="kiosk-bar">
-    <img src="/assets/absence-mark.svg" alt="Absence Less" />
+    <div class="kiosk-brand">
+      <img src="/assets/bnkr-mark.jpg" alt="BNKR" />
+      <div class="kiosk-titles">
+        <p class="kiosk-wordmark">Bunker Attendance</p>
+        <p class="kiosk-byline">by CODAI</p>
+      </div>
+    </div>
     <div class="kiosk-bar-right">
       <span id="kiosk-time" class="kiosk-time"></span>
-      <button type="button" class="ghost" id="btn-night" data-night-button aria-pressed="false">Night</button>
-      <a href="/">Home</a>
     </div>
   </header>
   <main class="kiosk-main">
@@ -55,6 +54,6 @@
   </div>
   <canvas id="canvas" hidden></canvas>
   <script src="/static/js/shared.js?v=26"></script>
-  <script src="/static/js/employee.js?v=25"></script>
+  <script src="/static/js/employee.js?v=26"></script>
 </body>
 </html>

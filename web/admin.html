@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Admin · Absence Less</title>
-  <link rel="icon" href="/assets/absence-mark.svg" type="image/svg+xml" />
+  <title>Bunker Attendance Manager</title>
+  <link rel="icon" href="/assets/bnkr-mark.jpg" type="image/jpeg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css?v=46" />
+  <link rel="stylesheet" href="/static/css/style.css?v=53" />
   <script>
     (function () {
       try {
@@ -17,13 +17,14 @@
     })();
   </script>
   <style>
-    html,body{margin:0;background:#ffffff;color:#171717;font-family:Inter,system-ui,"Segoe UI",sans-serif}
+    html,body{margin:0;background:#fafaf9;color:#1c1917;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
     #login-screen.hidden,body.is-authed #login-screen{display:none !important}
     #app-shell.hidden{display:none !important}
     body.is-authed #app-shell,#app-shell{display:block !important;width:100%;height:auto;overflow:visible}
     .sidebar{background:#fafafa;padding:16px;border-right:1px solid #e5e5e5}
     .nav-btn{display:block;color:#171717;padding:10px 12px;text-decoration:none;border-radius:6px;font-size:14px;font-weight:500}
-    .nav-btn.active{background:#fff1ea;color:#be3700;box-shadow:none}
+    .nav-btn.active{background:#fff1f1;color:#e61919;box-shadow:inset 3px 0 0 #e61919}
+    .avatar{background:#e61919;color:#fffafa}
     .content{display:block !important;overflow:visible !important;height:auto !important;min-height:240px;padding:16px;color:#171717}
     .page{display:block;color:#171717;height:auto;overflow:visible}
     .page[hidden]{display:none !important}
@@ -39,11 +40,12 @@
     h1{color:#171717;font-weight:600;letter-spacing:-.04em}
     .lede{color:#737373}
     .card{background:#ffffff;border:1px solid #e5e5e5;margin:0 0 16px;padding:12px;border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
-    button.primary{background:#be3700;color:#fffaf7;border:0;height:40px;padding:8px 16px;border-radius:6px;font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+    button.primary{background:#e61919;color:#fffafa;border:0;height:40px;padding:12px 16px;border-radius:8px;font-weight:600;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+    button.primary:hover{background:#cf1616}
     button.ghost,a.ghost{background:#ffffff;color:#171717;border:1px solid #e5e5e5;height:40px;padding:0 16px;border-radius:6px}
     button.danger,button.ghost.danger,a.ghost.danger{background:#dc2626;border-color:#dc2626;color:#fafafa}
     .hamburger{display:none;width:44px;height:44px;min-width:44px;margin:0;padding:10px;flex-direction:column;justify-content:center;gap:5px;background:#ffffff;border:1px solid #e5e5e5;border-radius:6px}
-    .hamburger span{display:block;height:2px;background:#be3700;border-radius:2px}
+    .hamburger span{display:block;height:2px;background:#e61919;border-radius:2px}
     .sidebar-close{display:none}
     @media (max-width:900px){
       .hamburger{display:flex}
@@ -68,27 +70,61 @@
       body.is-authed .sidebar .sidebar-foot{order:2;margin-top:auto}
       .top-date,.top-user{display:none}
     }
-    html.night,html.night body{background:#171717;color:#fafafa}
+    html.night,html.night body{background:#1c1917;color:#fafaf9}
     html.night .content,html.night .page,html.night h1{color:#fafafa}
     html.night .lede,html.night label{color:#a3a3a3}
     html.night .card{background:#262626;border-color:rgba(255,255,255,.1)}
     html.night input,html.night select,html.night textarea{background:#171717;color:#fafafa;border-color:rgba(255,255,255,.15)}
-    html.night button.primary{background:#be3700;color:#fffaf7}
+    html.night button.primary{background:#e61919;color:#fffafa}
     html.night button.ghost,html.night a.ghost{color:#fafafa;border-color:rgba(255,255,255,.1);background:#262626}
     html.night button.danger,html.night button.ghost.danger{background:#dc2626;color:#fafafa;border-color:#dc2626}
     html.night .hamburger{background:#262626;border-color:rgba(255,255,255,.1)}
-    html.night .hamburger span{background:#be3700}
-    html.night #export-dialog,html.night #help-dialog,html.night #correct-dialog{background:#262626;color:#fafafa;border-color:rgba(255,255,255,.1)}
+    html.night .hamburger span{background:#e61919}
+    html.night #export-dialog,html.night #help-dialog{background:#262626;color:#fafafa;border-color:rgba(255,255,255,.1)}
     html.night #export-dialog h2,html.night #export-dialog p,html.night #export-dialog label,html.night #export-dialog .muted,html.night #export-dialog .eyebrow,html.night #export-dialog .export-check,html.night #export-dialog #export-count{color:#fafafa}
+    #page-dashboard{max-width:1280px}
+    #page-dashboard h1{font-size:2.25rem;font-weight:700;letter-spacing:-0.03em}
+    #page-dashboard h2{font-size:1.5rem;font-weight:700}
+    #page-dashboard .lede{max-width:72ch;line-height:1.6}
+    .monitor-status{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+    .live-pill{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:8px;border:1px solid #e7e5e4;background:#fff;font-size:0.75rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase}
+    .live-pill:before{content:"";width:8px;height:8px;border-radius:50%;background:#a8a29e}
+    .live-pill.live{color:#15803d;border-color:#bbf7d0;background:#f0fdf4}
+    .live-pill.live:before{background:#22c55e;box-shadow:0 0 0 0 rgba(34,197,94,.7);animation:live-pulse 1.6s ease-out infinite}
+    .live-pill.offline{color:#e61919;border-color:#fecaca;background:#fef2f2}
+    .live-pill.offline:before{background:#e61919}
+    .mono-meta{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:0.75rem;color:#78716c}
+    .monitor-alert{margin:0 0 16px;padding:12px 14px;border-radius:8px;border:1px solid #fecaca;background:#fef2f2;color:#991b1b;font-weight:600}
+    .monitor-alert.hidden{display:none !important}
+    #page-dashboard .card{border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.06)}
+    #page-dashboard .stat-card{border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.06);border-top:3px solid #e7e5e4;transition:transform .2s ease,box-shadow .2s ease}
+    #page-dashboard .stat-card:hover{transform:scale(1.03);box-shadow:0 8px 20px rgba(0,0,0,.08)}
+    #page-dashboard .stat-card strong{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-weight:500}
+    #page-dashboard .stat-card.tone-ok{border-top-color:#22c55e}
+    #page-dashboard .stat-card.tone-late{border-top-color:#e6a01a}
+    #page-dashboard .stat-card.tone-critical{border-top-color:#e61919}
+    a.nav-btn[data-page="payroll"],#payroll-settings-form{display:none !important}
+    #dash-staff td.num,#dash-staff th.num{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;text-align:right;white-space:nowrap}
+    #dash-staff td .muted{font-family:system-ui,sans-serif;font-size:0.75rem}
+    #page-dashboard .donut-bar span{background:#22c55e}
+    #page-dashboard .donut-bar.tone-late span{background:#e6a01a}
+    #page-dashboard .donut-bar.tone-warn span,#page-dashboard .donut-bar.tone-critical span{background:#e61919}
+    #page-dashboard .donut-bar.tone-over span{background:#78716c}
+    #page-dashboard .week-bar{background:#e61919;border-radius:8px 8px 0 0}
+    @keyframes live-pulse{70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+    @media (max-width:768px){
+      #page-dashboard .page-head,#page-dashboard .split{display:block !important}
+      .monitor-status{margin-top:12px}
+    }
   </style>
 </head>
 <body>
   <div id="login-screen" class="login-screen">
     <div class="login-split">
     <form id="login-form" class="login-card" method="post" action="/admin/session" autocomplete="on">
-      <img src="/assets/absence-mark.svg" alt="Absence Less" />
-      <p class="eyebrow">Absence Less administration</p>
-      <h1>Sign in</h1>
+      <img src="/assets/bnkr-mark.jpg" alt="BNKR" />
+      <p class="eyebrow">by CODAI</p>
+      <h1>Bunker Attendance Manager</h1>
       <label>Username <input id="login-user" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" /></label>
       <label>Password <input id="login-pass" name="password" type="password" autocomplete="current-password" /></label>
       <button class="primary" id="btn-login" type="submit">Enter console</button>
@@ -96,8 +132,8 @@
       <p id="login-status" class="status"></p>
     </form>
     <div class="login-hero">
-      <img src="/assets/absence-mark.svg" alt="Absence Less" />
-      <p>Smarter presence. In every moment.</p>
+      <img src="/assets/bnkr-mark.jpg" alt="BNKR" />
+      <p>Bunker Attendance Manager</p>
     </div>
     </div>
   </div>
@@ -108,24 +144,23 @@
       <div class="sidebar-brand">
         <button type="button" class="nav-btn console-menu" id="btn-sidebar-toggle" aria-label="Collapse sidebar">Menu</button>
         <button type="button" class="sidebar-close" id="btn-close-nav">Close</button>
-        <img class="logo" src="/assets/absence-mark.svg" alt="Absence Less" />
-        <p class="brand-name">Absence <span>Less</span></p>
-        <p class="sidebar-context" id="sidebar-company">Absence Less</p>
+        <img class="logo" src="/assets/bnkr-mark.jpg" alt="BNKR" />
+        <p class="brand-name">Bunker Attendance Manager</p>
+        <p class="sidebar-context muted">by CODAI</p>
+        <p class="sidebar-context" id="sidebar-company">Bunker Attendance</p>
         <p class="sidebar-context muted" id="sidebar-branch">Headquarters</p>
       </div>
       <nav id="console-nav">
-        <a class="nav-btn" data-page="dashboard" href="/admin?page=dashboard"><span class="nav-ico" aria-hidden="true">▣</span> Overview</a>
-        <a class="nav-btn" data-page="people" href="/admin?page=people"><span class="nav-ico" aria-hidden="true">☰</span> Employees</a>
-        <a class="nav-btn" data-page="register" href="/admin?page=register"><span class="nav-ico" aria-hidden="true">◉</span> Enroll face</a>
+        <a class="nav-btn admin-only" data-page="dashboard" href="/admin?page=dashboard"><span class="nav-ico" aria-hidden="true">▣</span> Overview</a>
+        <a class="nav-btn admin-only" data-page="people" href="/admin?page=people"><span class="nav-ico" aria-hidden="true">☰</span> Employees</a>
+        <a class="nav-btn admin-only" data-page="register" href="/admin?page=register"><span class="nav-ico" aria-hidden="true">◉</span> Enroll face</a>
         <a class="nav-btn" data-page="attendance" href="/admin?page=attendance"><span class="nav-ico" aria-hidden="true">◷</span> Attendance</a>
-        <a class="nav-btn" data-page="shifts" href="/admin?page=shifts"><span class="nav-ico" aria-hidden="true">▤</span> Shifts &amp; Schedules</a>
-        <a class="nav-btn" data-page="reports" href="/admin?page=reports"><span class="nav-ico" aria-hidden="true">▧</span> Reports &amp; Analytics</a>
-        <a class="nav-btn" data-page="branches" href="/admin?page=branches"><span class="nav-ico" aria-hidden="true">⌂</span> Branches &amp; Departments</a>
-        <a class="nav-btn" data-page="devices" href="/admin?page=devices"><span class="nav-ico" aria-hidden="true">▣</span> Devices &amp; Kiosks</a>
+        <a class="nav-btn admin-only" data-page="shifts" href="/admin?page=shifts"><span class="nav-ico" aria-hidden="true">▤</span> Shifts &amp; Schedules</a>
+        <a class="nav-btn admin-only" data-page="reports" href="/admin?page=reports"><span class="nav-ico" aria-hidden="true">▧</span> Reports &amp; Analytics</a>
+        <a class="nav-btn admin-only" data-page="payroll" href="/admin?page=payroll" hidden><span class="nav-ico" aria-hidden="true">▣</span> Payroll</a>
         <a class="nav-btn super-only" data-page="admins" href="/admin?page=admins"><span class="nav-ico" aria-hidden="true">⚙</span> Users &amp; Permissions</a>
-        <a class="nav-btn" data-page="integrations" href="/admin?page=integrations"><span class="nav-ico" aria-hidden="true">{ }</span> API &amp; Integrations</a>
-        <a class="nav-btn" data-page="notifications" href="/admin?page=notifications"><span class="nav-ico" aria-hidden="true">●</span> Notifications <span class="nav-badge" id="nav-alert-count" hidden>0</span></a>
-        <a class="nav-btn" data-page="settings" href="/admin?page=settings"><span class="nav-ico" aria-hidden="true">✦</span> Settings</a>
+        <a class="nav-btn admin-only" data-page="notifications" href="/admin?page=notifications"><span class="nav-ico" aria-hidden="true">●</span> Notifications <span class="nav-badge" id="nav-alert-count" hidden>0</span></a>
+        <a class="nav-btn admin-only" data-page="settings" href="/admin?page=settings"><span class="nav-ico" aria-hidden="true">✦</span> Settings</a>
       </nav>
       <div class="sidebar-foot">
         <div class="sidebar-user">
@@ -166,35 +201,42 @@
       <p id="admin-flash" class="banner hidden"></p>
       <p id="toast" class="toast hidden" role="status"></p>
 
-      <section id="page-dashboard" class="page active">
+      <section id="page-dashboard" class="page active monitor-dash">
         <div class="page-head">
           <div>
             <p class="eyebrow" id="dash-greet">Monitor</p>
             <h1>Overview</h1>
-            <p class="lede">Live presence from registered tablets. Each kiosk is identified by its MAC address.</p>
+            <p class="lede">Every employee this month. A missing clock-in takes 1 day. Absent takes 2. Day off is free until 4 are used.</p>
           </div>
-          <div class="page-filters card">
-            <label>Range
-              <select id="dash-range">
-                <option value="today">Today</option>
-                <option value="week">This week</option>
-                <option value="month">This month</option>
-                <option value="custom">Custom range</option>
-              </select>
-            </label>
-            <label class="hidden" id="dash-custom-wrap">From
-              <input id="dash-from" type="date" />
-            </label>
-            <label class="hidden" id="dash-custom-to-wrap">To
-              <input id="dash-to" type="date" />
-            </label>
-            <label>Branch
-              <select id="dash-branch"><option value="">All branches</option><option value="HQ">Headquarters</option></select>
-            </label>
-            <label>Department
-              <select id="dash-dept"><option value="">All departments</option></select>
-            </label>
+          <div class="monitor-status">
+            <span id="dash-link" class="live-pill">Connecting</span>
+            <span id="dash-refresh" class="mono-meta">Waiting for the first refresh</span>
             <button type="button" class="primary" id="dash-export" data-export="monthly">Export</button>
+          </div>
+        </div>
+        <p id="dash-alert" class="monitor-alert hidden"></p>
+        <div class="card pad">
+          <h2>This month</h2>
+          <p class="lede" id="dash-month-note">Salary is the monthly amount. Deducted is what this month has taken so far. To pay is salary minus that.</p>
+          <div class="table-wrap">
+            <table class="report-table" id="dash-staff">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th class="num">Salary</th>
+                  <th class="num">Days off left</th>
+                  <th class="num">Late</th>
+                  <th class="num">Absent</th>
+                  <th class="num">No clock-in</th>
+                  <th class="num">No clock-out</th>
+                  <th class="num">Extra days</th>
+                  <th class="num">Deducted</th>
+                  <th class="num">To pay</th>
+                  <th>Today</th>
+                </tr>
+              </thead>
+              <tbody id="dash-staff-body"></tbody>
+            </table>
           </div>
         </div>
         <div id="dash-cards" class="stats-grid"></div>
@@ -217,16 +259,6 @@
           <div class="card pad">
             <h2>Recent attendance activity</h2>
             <div id="dash-activity" class="table-wrap"></div>
-          </div>
-        </div>
-        <div class="split">
-          <div class="card pad">
-            <h2>Branch performance</h2>
-            <div id="dash-branches" class="table-wrap"></div>
-          </div>
-          <div class="card pad">
-            <h2>Device health</h2>
-            <div id="dash-devices" class="log-list"></div>
           </div>
         </div>
         <div class="card pad">
@@ -255,51 +287,32 @@
               <input id="enroll-id" name="employee_id" type="text" value="" placeholder="Unique ID" required />
             </label>
             <label>
-              EMAIL
-              <input id="enroll-email" name="email" type="email" value="" placeholder="name@company.com" />
+              JOB TITLE
+              <input id="enroll-title" name="job_title" type="text" value="" placeholder="Role" />
+            </label>
+            <label>
+              TYPE
+              <select id="enroll-type" name="work_type">
+                <option value="full">Full time</option>
+                <option value="part">Part time — Thu, Fri, Sat</option>
+                <option value="leader">Team leader</option>
+              </select>
+            </label>
+            <label id="leader-user-label" hidden>
+              TEAM LEADER USERNAME
+              <input id="enroll-leader-user" name="leader_username" type="text" autocomplete="off" placeholder="Login name" />
+            </label>
+            <label id="leader-pass-label" hidden>
+              TEAM LEADER PASSWORD
+              <input id="enroll-leader-pass" name="leader_password" type="password" autocomplete="new-password" placeholder="Login password" />
             </label>
             <label>
               PHONE
               <input id="enroll-phone" name="phone" type="tel" value="" placeholder="05…" />
             </label>
             <label>
-              JOB TITLE
-              <input id="enroll-title" name="job_title" type="text" value="" placeholder="Role" />
-            </label>
-            <label>
-              DEPARTMENT
-              <input id="enroll-dept" name="department" type="text" value="" placeholder="Department" />
-            </label>
-            <label>
-              BRANCH
-              <input id="enroll-branch" name="branch" type="text" value="HQ" />
-            </label>
-            <label>
-              MANAGER
-              <input id="enroll-manager" name="manager" type="text" value="" />
-            </label>
-            <label>
-              EMPLOYMENT STATUS
-              <select id="enroll-status" name="employment_status">
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </label>
-            <label>
-              JOINING DATE
-              <input id="enroll-joined" name="joining_date" type="date" />
-            </label>
-            <label>
-              EMERGENCY CONTACT
-              <input id="enroll-em-name" name="emergency_name" type="text" value="" placeholder="Name" />
-            </label>
-            <label>
-              EMERGENCY PHONE
-              <input id="enroll-em-phone" name="emergency_phone" type="tel" value="" placeholder="Phone" />
-            </label>
-            <label>
-              USUAL SHIFT (OPTIONAL)
-              <select id="enroll-shift" name="shift_id"></select>
+              SALARY
+              <input id="enroll-salary" name="monthly_salary" type="number" min="0" step="0.01" value="" placeholder="Monthly salary" />
             </label>
           </div>
 
@@ -333,7 +346,7 @@
         <p class="lede">Search, filter, and export. Face enrollment never exposes biometric templates.</p>
         <div class="toolbar">
           <label>Search
-            <input id="people-search" type="search" placeholder="Name, ID, or email" />
+            <input id="people-search" type="search" placeholder="Name, ID, or phone" />
           </label>
           <label>Branch
             <select id="people-branch"><option value="">All</option></select>
@@ -371,9 +384,10 @@
               <tr>
                 <th>ID</th>
                 <th>Name</th>
-                <th>Department</th>
-                <th>Branch</th>
-                <th>Shift</th>
+                <th>Job title</th>
+                <th>Type</th>
+                <th>Phone</th>
+                <th>Salary</th>
                 <th>Face</th>
                 <th>Status</th>
                 <th></th>
@@ -388,7 +402,7 @@
       <section id="page-attendance" class="page" hidden>
         <p class="eyebrow">Timekeeping</p>
         <h1>Attendance</h1>
-        <p class="lede">Original clock events are never overwritten. Corrections require a reason and stay in the audit log.</p>
+        <p class="lede">No clock-in deducts 1 day on its own. Use Absent for 2 days, or Day off to use one of the 4 free days.</p>
         <div class="toolbar">
           <label>Date
             <input id="att-date" type="date" />
@@ -401,13 +415,17 @@
               <option value="">All</option>
               <option>Present</option>
               <option>Late</option>
+              <option>Absent</option>
               <option>Missing Check-out</option>
+              <option>No clock-in</option>
+              <option>Day off</option>
             </select>
           </label>
           <button type="button" class="primary" id="btn-att-load">Apply filters</button>
-          <button type="button" class="ghost" id="btn-att-export" data-export="daily">Export</button>
-          <a class="ghost link-btn" href="/admin?page=reports">Timesheet reports</a>
+          <button type="button" class="ghost admin-only" id="btn-att-export" data-export="daily">Export</button>
+          <a class="ghost link-btn admin-only" href="/admin?page=reports">Timesheet reports</a>
         </div>
+        <p class="muted">Pick Absent or Day off on the employee row. A missing clock-in stays 1 day until you do.</p>
         <p id="att-status-msg" class="status"></p>
         <div class="table-wrap">
           <table class="report-table">
@@ -427,28 +445,6 @@
             </thead>
             <tbody id="att-body"></tbody>
           </table>
-        </div>
-        <div class="card pad">
-          <h2>Correction requests</h2>
-          <p class="muted">Approved or rejected here. The original session times stay as captured by the kiosk.</p>
-          <div class="table-wrap">
-            <table class="report-table">
-              <thead>
-                <tr>
-                  <th>When</th>
-                  <th>Employee</th>
-                  <th>Field</th>
-                  <th>Old</th>
-                  <th>Proposed</th>
-                  <th>Reason</th>
-                  <th>Actor</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="att-audit-body"></tbody>
-            </table>
-          </div>
         </div>
       </section>
 
@@ -478,7 +474,7 @@
       <section id="page-reports" class="page" hidden>
         <p class="eyebrow">Attendance</p>
         <h1>Reports &amp; analytics</h1>
-        <p class="lede">Daily, weekly, or monthly hours. Monthly includes average working hours per employee. Raw duration is not payroll until Settings policies are applied. Export PDF or Excel.</p>
+        <p class="lede">Daily, weekly, or monthly hours plus calculated salary for the same range. Export PDF or Excel.</p>
         <form method="get" action="/admin" class="card form-grid-3" id="report-form">
           <input type="hidden" name="page" value="reports" />
           <input type="hidden" name="t" value="" />
@@ -510,9 +506,9 @@
         </div>
         <p id="report-range" class="muted"></p>
         <div id="report-summary" class="stats-grid"></div>
-        <div id="report-avg-wrap" class="hidden">
-          <h2>Monthly averages</h2>
-          <p class="lede">Average hours = total hours ÷ days worked in this month. Not payroll hours.</p>
+        <div id="report-avg-wrap">
+          <h2>Employee summary</h2>
+          <p class="lede">Hours from closed sessions. Salary is calculated from payroll settings for this date range.</p>
           <div class="table-wrap">
             <table class="report-table">
               <thead>
@@ -523,6 +519,8 @@
                   <th>Sessions</th>
                   <th>Total hours</th>
                   <th>Avg hours / day</th>
+                  <th>Base salary</th>
+                  <th>Net pay</th>
                 </tr>
               </thead>
               <tbody id="report-avg-body"></tbody>
@@ -616,15 +614,21 @@
       <section id="page-admins" class="page" hidden>
         <p class="eyebrow">Access</p>
         <h1>Users &amp; permissions</h1>
-        <p class="lede">You can create up to three admins. They can register members, manage hours, and view visits. Only the company owner can add them or change their passwords. Hiding a button is not a security mechanism — these actions are enforced on the server.</p>
+        <p class="lede">Admin has full access. A team leader can only assign a day off or an absence. Only the owner account can add users.</p>
         <p id="admin-quota" class="muted"></p>
         <form method="post" action="/admin/do" class="card form-grid-3">
           <input type="hidden" name="action" value="add_admin" />
           <input type="hidden" name="t" value="" />
           <label>USERNAME <input id="staff-user" name="staff_username" autocomplete="off" required /></label>
           <label>PASSWORD <input id="staff-pass" name="staff_password" type="password" autocomplete="new-password" required /></label>
+          <label>ROLE
+            <select id="staff-role" name="staff_role">
+              <option value="admin">Admin — full access</option>
+              <option value="leader">Team leader</option>
+            </select>
+          </label>
           <div class="actions report-actions">
-            <button id="btn-add-admin" class="primary" type="submit">Invite admin</button>
+            <button id="btn-add-admin" class="primary" type="submit">Add user</button>
           </div>
         </form>
         <p id="staff-status" class="status"></p>
@@ -642,7 +646,7 @@
         </div>
         <div class="card pad">
           <h2>Default roles</h2>
-          <p class="muted">Company Owner (super) and HR Administrator are live. Branch Manager, Supervisor, and Read-only Auditor are planned and not yet persisted.</p>
+          <p class="muted">Admin can use every page. A team leader can only assign a day off or an absence.</p>
         </div>
         <h2 class="staff-own">Your password</h2>
         <form method="post" action="/admin/do" class="card form-grid">
@@ -671,7 +675,6 @@
               <option value="">All</option>
               <option value="late">Late arrivals</option>
               <option value="missing_checkout">Missing check-outs</option>
-              <option value="correction">Corrections</option>
             </select>
           </label>
         </div>
@@ -694,23 +697,141 @@
           <label>Timezone <input id="set-tz" name="timezone" /></label>
           <label>Working days <input id="set-days" name="working_days" /></label>
           <label>Contact <input id="set-contact" name="contact" /></label>
-          <h2 class="span-all">Attendance</h2>
-          <label>Grace period (minutes) <input id="set-grace" name="grace_minutes" /></label>
-          <label>Duplicate-scan window (seconds) <input id="set-dup" name="duplicate_scan_seconds" /></label>
-          <label>Overtime policy
-            <textarea id="set-ot" name="overtime_policy" rows="3"></textarea>
-          </label>
-          <label class="face-toggle">Face premium
-            <input id="set-face" type="checkbox" />
-          </label>
           <div class="actions span-all">
             <button class="primary" type="submit">Save settings</button>
           </div>
           <p id="settings-status" class="status span-all"></p>
         </form>
-        <div class="card pad">
-          <h2>Recognition, security, subscription</h2>
-          <div id="settings-preview"></div>
+        <form id="payroll-settings-form" class="card form-grid-3" hidden>
+          <h2 class="span-all">Payroll &amp; salary</h2>
+          <p class="muted span-all">These rules are saved and used by Payroll. Attendance hours stay elapsed time; this module converts them into pay.</p>
+          <label>Currency <input id="pay-currency" /></label>
+          <label>Daily rate divisor
+            <select id="pay-divisor">
+              <option value="fixed_30">Fixed 30 days</option>
+              <option value="calendar_days">Calendar days in period</option>
+              <option value="scheduled_workdays">Scheduled working days</option>
+            </select>
+          </label>
+          <label>Working hours per day <input id="pay-hours" type="number" min="1" step="0.25" /></label>
+          <label>Rounding
+            <select id="pay-round">
+              <option value="half_up">Half up</option>
+              <option value="down">Down</option>
+              <option value="up">Up</option>
+            </select>
+          </label>
+          <label>Rounding precision <input id="pay-prec" type="number" min="0" max="4" /></label>
+          <label>Policy effective date <input id="pay-effective" type="date" /></label>
+          <h2 class="span-all">Leave</h2>
+          <label>Paid leave allowance (days) <input id="pay-leave" type="number" min="0" step="0.5" /></label>
+          <label>Unused leave compensation
+            <select id="pay-unused">
+              <option value="0">Disabled</option>
+              <option value="1">Enabled</option>
+            </select>
+          </label>
+          <label>Compensation payout
+            <select id="pay-payout">
+              <option value="end_of_period">End of period</option>
+              <option value="monthly">Monthly</option>
+              <option value="annual">Annual</option>
+            </select>
+          </label>
+          <label>Leave carry-forward
+            <select id="pay-carry">
+              <option value="0">Disabled</option>
+              <option value="1">Enabled</option>
+            </select>
+          </label>
+          <label>Max carry-forward days <input id="pay-carry-max" type="number" min="0" step="0.5" /></label>
+          <h2 class="span-all">Attendance deductions</h2>
+          <p class="muted span-all">One day is the monthly salary divided by the divisor. A 6:00 shift clock-in at 6:15:00 is still on time.</p>
+          <ul class="muted span-all">
+            <li>16–30 minutes late: 0.25 day</li>
+            <li>31–60 minutes late: 0.50 day</li>
+            <li>More than 60 minutes late: 1 day</li>
+            <li>No clock-out: 0.5 day</li>
+            <li>No clock-in: 1 day</li>
+            <li>Absent without permission: 2 days</li>
+          </ul>
+          <label>Public holidays (YYYY-MM-DD) <input id="pay-holidays" placeholder="2026-10-06, 2026-10-13" /></label>
+          <div class="actions span-all">
+            <button class="primary" type="submit">Save payroll rules</button>
+          </div>
+          <p id="payroll-settings-status" class="status span-all"></p>
+        </form>
+      </section>
+
+      <section id="page-payroll" class="page" hidden>
+        <div class="page-head">
+          <div>
+            <p class="eyebrow">Compensation</p>
+            <h1>Payroll</h1>
+            <p class="lede">Preview, approve, and lock salaries from live attendance. Finalized runs are snapshots and do not change if later punches arrive.</p>
+          </div>
+          <div class="page-filters card">
+            <label>Start <input id="pay-start" type="date" /></label>
+            <label>End <input id="pay-end" type="date" /></label>
+            <label>Search <input id="pay-search" placeholder="Name or ID" /></label>
+            <div class="actions">
+              <button type="button" class="ghost" id="pay-preview">Preview</button>
+              <button type="button" class="primary" id="pay-calc">Calculate</button>
+            </div>
+          </div>
+        </div>
+        <p id="pay-status" class="status"></p>
+        <div id="pay-cards" class="stats-grid"></div>
+        <div class="actions" style="margin:0 0 16px">
+          <button type="button" class="ghost" id="pay-submit">Send for approval</button>
+          <button type="button" class="ghost" id="pay-approve">Approve</button>
+          <button type="button" class="primary" id="pay-finalize">Finalize / lock</button>
+          <button type="button" class="ghost" id="pay-csv">Export CSV</button>
+          <button type="button" class="ghost" id="pay-xlsx">Export Excel</button>
+        </div>
+        <div class="split">
+          <div class="card pad">
+            <h2>Employee payroll</h2>
+            <div id="pay-table" class="table-wrap"></div>
+          </div>
+          <div class="card pad">
+            <h2>Detail</h2>
+            <p id="pay-detail-empty" class="muted">Select an employee to see the itemized breakdown.</p>
+            <div id="pay-detail" class="hidden"></div>
+            <form id="pay-profile-form" class="form-grid hidden" style="margin-top:16px">
+              <h2 class="span-all">Employee pay profile</h2>
+              <input type="hidden" id="pay-eid" />
+              <label>Monthly base salary <input id="pay-emp-salary" type="number" min="0" step="0.01" /></label>
+              <label>Leave allowance override <input id="pay-emp-leave" placeholder="inherit" /></label>
+              <label>Unused-leave eligible
+                <select id="pay-emp-unused">
+                  <option value="inherit">Inherit company rule</option>
+                  <option value="1">Yes</option>
+                  <option value="0">No</option>
+                </select>
+              </label>
+              <label>Effective date <input id="pay-emp-effective" type="date" /></label>
+              <div class="actions span-all">
+                <button class="primary" type="submit">Save profile</button>
+              </div>
+            </form>
+            <form id="pay-leave-form" class="form-grid hidden" style="margin-top:12px">
+              <h2 class="span-all">Record leave</h2>
+              <label>Date <input id="pay-leave-date" type="date" /></label>
+              <label>Kind
+                <select id="pay-leave-kind">
+                  <option value="paid">Paid leave</option>
+                  <option value="unpaid">Unpaid leave</option>
+                  <option value="exception">Approved exception</option>
+                  <option value="late_ok">Approved late arrival</option>
+                  <option value="unpermitted">Absent without permission</option>
+                </select>
+              </label>
+              <div class="actions span-all">
+                <button class="ghost" type="submit">Add leave</button>
+              </div>
+            </form>
+          </div>
         </div>
       </section>
     </main>
@@ -719,7 +840,7 @@
 
   <dialog id="export-dialog" class="modal-card export-dialog">
     <h2>Export</h2>
-    <p class="muted">Downloads a file from live attendance data. Hours are elapsed check-in to check-out time, not payroll.</p>
+    <p class="muted">Downloads live attendance. Employee summary includes calculated salary for the selected range.</p>
     <form id="export-form">
       <div class="form-grid-3">
         <label>Report type
@@ -784,39 +905,15 @@
     </form>
   </dialog>
   <dialog id="help-dialog" class="modal-card">
-    <h2>Absence Less help</h2>
-    <p>Use Enroll face to capture Face ID. Register each kiosk on Devices &amp; Kiosks with its MAC address, then open /kiosk. Corrections never replace the original scan.</p>
+    <h2>Bunker Attendance Manager</h2>
+    <p>Use Enroll face to capture Face ID, then open /kiosk on the tablet.</p>
     <p><a href="/kiosk">Open tablet kiosk</a></p>
     <form method="dialog"><button class="primary" type="submit">Close</button></form>
   </dialog>
-  <dialog id="correct-dialog" class="modal-card">
-    <h2>Correct attendance</h2>
-    <p class="muted">The original event stays. This stores a proposed change with your name, the time, and the reason.</p>
-    <form id="correct-form">
-      <input type="hidden" id="correct-id" />
-      <label>Field
-        <select id="correct-field">
-          <option value="clock_in">Check-in</option>
-          <option value="clock_out">Check-out</option>
-        </select>
-      </label>
-      <label>New value
-        <input id="correct-value" type="datetime-local" required />
-      </label>
-      <label>Explanation
-        <textarea id="correct-reason" required rows="3"></textarea>
-      </label>
-      <div class="actions">
-        <button class="primary" type="submit">Submit request</button>
-        <button class="ghost" type="button" id="correct-cancel">Cancel</button>
-      </div>
-    </form>
-  </dialog>
-
   <canvas id="work-canvas" hidden></canvas>
   <script src="/static/js/shared.js?v=26"></script>
-  <script src="/static/js/admin.js?v=26"></script>
-  <script src="/static/js/codai-console.js?v=35"></script>
+  <script src="/static/js/admin.js?v=34"></script>
+  <script src="/static/js/codai-console.js?v=48"></script>
   <script>
     (function () {
       var pages = document.querySelectorAll(".page");

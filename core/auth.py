@@ -50,7 +50,7 @@ def read_token(token: str) -> str | None:
         if not username:
             return None
         role = str(payload.get("r") or "admin")
-        if role not in ("super", "admin"):
+        if role not in ("super", "admin", "leader"):
             role = "admin"
         return {"username": username, "role": role}
     except (ValueError, json.JSONDecodeError, TypeError):

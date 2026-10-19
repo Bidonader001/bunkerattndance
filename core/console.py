@@ -22,7 +22,7 @@ SETTING_KEYS = (
 )
 
 SETTING_DEFAULTS = {
-    "company_name": "Absence Less",
+    "company_name": "Bunker Attendance",
     "timezone": "Asia/Riyadh",
     "working_days": "Sun-Thu",
     "contact": "",
@@ -95,10 +95,8 @@ def overview() -> dict:
     total = len(people)
     absent = max(0, total - present)
     late = sum(1 for s in sessions if s.get("late"))
-    company = _setting("company_name") or "Absence Less"
+    company = _setting("company_name") or "Bunker Attendance"
     branch = "Headquarters"
-    devices = db.list_devices()
-    online_devices = [d for d in devices if d.get("online") and d.get("status") != "revoked"]
     distribution = [
         {"label": "Present", "value": max(0, present - late), "tone": "ok"},
         {"label": "Late", "value": late, "tone": "late"},
@@ -113,8 +111,6 @@ def overview() -> dict:
                 "employee_id": s.get("employee_id") or "—",
                 "event": "Check-out" if s.get("clock_out") else "Check-in",
                 "time": str(s.get("clock_out") or s.get("clock_in") or "")[:16].replace("T", " "),
-                "branch": branch,
-                "device": s.get("device_mac") or "Kiosk",
                 "status": s.get("late_label") or "On time",
                 "source": "live",
             }
@@ -130,41 +126,7 @@ def overview() -> dict:
                 "source": "live",
             }
         )
-    for d in devices:
-        if d.get("status") == "revoked":
-            continue
-        if d.get("is_new"):
-            pending.append(
-                {
-                    "kind": "new_device",
-                    "title": "New kiosk opened",
-                    "detail": f"{d.get('name')} · IP {d.get('last_ip') or '—'} · MAC {d.get('mac_address')}",
-                    "href": "/admin?page=devices",
-                    "source": "live",
-                }
-            )
-        if not d.get("online"):
-            pending.append(
-                {
-                    "kind": "device_offline",
-                    "title": "Device offline",
-                    "detail": f"{d.get('name')} · {d.get('mac_address')}",
-                    "href": "/admin?page=devices",
-                    "source": "live",
-                }
-            )
-    for row in db.list_attendance_audit(12):
-        if row.get("status") == "pending":
-            pending.append(
-                {
-                    "kind": "correction",
-                    "title": "Attendance correction",
-                    "detail": f"{row.get('employee_name')} · {row.get('field')} · {row.get('actor')}",
-                    "href": "/admin?page=attendance",
-                    "source": "live",
-                }
-            )
-    return {
+    result = {
         "source": "live",
         "company": company,
         "branch": branch,
@@ -176,7 +138,6 @@ def overview() -> dict:
             {"key": "late", "label": "Late arrivals", "value": late, "href": "/admin?page=reports", "source": "live"},
             {"key": "working", "label": "Currently working", "value": len(onsite), "href": "/admin?page=dashboard", "source": "live"},
             {"key": "missing", "label": "Missing check-outs", "value": len(missing), "href": "/admin?page=attendance", "source": "live"},
-            {"key": "devices", "label": "Online attendance devices", "value": len(online_devices), "href": "/admin?page=devices", "source": "live"},
         ],
         "week": week,
         "distribution": distribution,
@@ -193,20 +154,61 @@ def overview() -> dict:
                 "source": "live",
             }
         ],
-        "devices": [
-            {
-                "name": d.get("name"),
-                "mac": d.get("mac_address"),
-                "ip": d.get("last_ip"),
-                "status": d.get("live_status"),
-                "last_sync": str(d.get("last_seen") or "—")[:16].replace("T", " "),
-                "pending": 0,
-                "source": "live",
-            }
-            for d in devices[:8]
-        ],
+        "devices": [],
         "unread_alerts": len(pending),
     }
+    return _stamp_today(_attach_month_board(result), sessions, today)
+
+
+def _attach_month_board(payload: dict) -> dict:
+    try:
+        from core import payroll
+
+        board = payroll.month_board()
+    except Exception:
+        board = {
+            "employees": [],
+            "currency": "EGP",
+            "through": _iso_today(),
+            "days_off_allowance": 4,
+            "month": _iso_today()[:7],
+        }
+    payload["staff"] = board.get("employees") or []
+    payload["staff_through"] = board.get("through") or _iso_today()
+    payload["staff_month"] = board.get("month") or _iso_today()[:7]
+    payload["currency"] = board.get("currency") or "EGP"
+    payload["days_off_allowance"] = board.get("days_off_allowance") or 4
+    return payload
+
+
+def _stamp_today(payload: dict, sessions: list, today: str) -> dict:
+    status_by_id: dict[str, str] = {}
+    for session in sessions:
+        eid = str(session.get("employee_id") or "")
+        if not eid:
+            continue
+        if not session.get("clock_out"):
+            status_by_id[eid] = "Missing Check-out"
+        elif session.get("late"):
+            status_by_id.setdefault(eid, "Late")
+        else:
+            status_by_id.setdefault(eid, "Present")
+    absent_ids = {str(row.get("employee_id") or "") for row in db.list_day_leave(today, "unpermitted")}
+    day_off_ids = {str(row.get("employee_id") or "") for row in db.list_day_leave(today, "day_off")}
+    for row in payload.get("staff") or []:
+        eid = str(row.get("employee_id") or "")
+        if eid in status_by_id:
+            row["today"] = status_by_id[eid]
+        elif eid in absent_ids:
+            row["today"] = "Absent"
+        elif eid in day_off_ids:
+            row["today"] = "Day off"
+        elif row.get("work_type") == "part" and date.fromisoformat(today).weekday() not in {3, 4, 5}:
+            row["today"] = "Off"
+        else:
+            row["today"] = "No clock-in"
+        row["today_date"] = today
+    return payload
 
 
 def attendance_rows(work_date: str = "", name: str = "") -> dict:
@@ -240,6 +242,79 @@ def attendance_rows(work_date: str = "", name: str = "") -> dict:
                 "source": "live",
             }
         )
+    seen = {str(row["employee_id"]) for row in out}
+    needle = name.strip().lower()
+
+    def _marked(leave: dict, status: str, prefix: str, device_fallback: str) -> None:
+        eid = str(leave.get("employee_id") or "")
+        if not eid or eid in seen:
+            return
+        label = leave.get("employee_name") or eid
+        if needle and needle not in label.lower() and needle not in eid.lower():
+            return
+        seen.add(eid)
+        out.append(
+            {
+                "id": f"{prefix}-{leave.get('id')}",
+                "employee_name": label,
+                "employee_id": eid,
+                "date": day,
+                "scheduled_start": "—",
+                "clock_in": "—",
+                "scheduled_end": "—",
+                "clock_out": "—",
+                "hours": "—",
+                "late_minutes": 0,
+                "late": "—",
+                "overtime": "—",
+                "status": status,
+                "shift": "—",
+                "device": leave.get("actor") or device_fallback,
+                "source": "live",
+            }
+        )
+
+    for leave in db.list_day_leave(day, "unpermitted"):
+        _marked(leave, "Absent", "absent", "Marked absent")
+    for leave in db.list_day_leave(day, "day_off"):
+        _marked(leave, "Day off", "dayoff", "Day off")
+    for person in db.list_employees():
+        if (person.get("employment_status") or "active").lower() == "inactive":
+            continue
+        eid = str(person.get("employee_id") or "")
+        if not eid or eid in seen:
+            continue
+        label = person.get("name") or eid
+        if needle and needle not in label.lower() and needle not in eid.lower():
+            continue
+        try:
+            work_day = date.fromisoformat(day)
+        except ValueError:
+            work_day = date.today()
+        if str(person.get("work_type") or "full") == "part" and work_day.weekday() not in {3, 4, 5}:
+            continue
+        seen.add(eid)
+        out.append(
+            {
+                "id": f"noclock-{eid}",
+                "employee_name": label,
+                "employee_id": eid,
+                "date": day,
+                "scheduled_start": "—",
+                "clock_in": "—",
+                "scheduled_end": "—",
+                "clock_out": "—",
+                "hours": "—",
+                "late_minutes": 0,
+                "late": "—",
+                "overtime": "—",
+                "status": "No clock-in",
+                "shift": person.get("shift_name") or "—",
+                "device": "—",
+                "source": "live",
+            }
+        )
+    out.sort(key=lambda row: (str(row.get("employee_name") or ""), str(row.get("clock_in") or "")))
     return {"source": "live", "work_date": day, "rows": out, "audits": db.list_attendance_audit(40)}
 
 
@@ -300,20 +375,6 @@ def notifications() -> dict:
                     "href": "/admin?page=attendance",
                     "read": False,
                     "time": str(s.get("clock_in") or "")[:16].replace("T", " "),
-                    "source": "live",
-                }
-            )
-    for row in db.list_attendance_audit(20):
-        if row.get("status") == "pending":
-            items.append(
-                {
-                    "id": f"audit-{row.get('id')}",
-                    "type": "correction",
-                    "title": "Pending correction",
-                    "message": f"{row.get('employee_name')} · {row.get('field')}",
-                    "href": "/admin?page=attendance",
-                    "read": False,
-                    "time": str(row.get("created_at") or "")[:16].replace("T", " "),
                     "source": "live",
                 }
             )

@@ -119,6 +119,7 @@ def init_db() -> None:
             "emergency_name": "TEXT",
             "emergency_phone": "TEXT",
             "has_face": "INTEGER NOT NULL DEFAULT 1",
+            "work_type": "TEXT NOT NULL DEFAULT 'full'",
         }
         for col, decl in emp_extra.items():
             if col not in cols:
@@ -202,13 +203,132 @@ def init_db() -> None:
         if face is None:
             conn.execute("INSERT INTO gym_settings (key, value) VALUES ('face_premium', '1')")
         company = conn.execute("SELECT value FROM gym_settings WHERE key = 'company_name'").fetchone()
-        if company is None or str(company[0]).strip() in {"", "CODAI", "absence-less", "Access Pass"}:
+        if company is None or str(company[0]).strip() in {
+            "",
+            "CODAI",
+            "absence-less",
+            "Access Pass",
+            "Absence Less",
+        }:
             conn.execute(
-                "INSERT INTO gym_settings (key, value) VALUES ('company_name', 'Absence Less') ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+                "INSERT INTO gym_settings (key, value) VALUES ('company_name', 'Bunker Attendance') ON CONFLICT(key) DO UPDATE SET value = excluded.value"
             )
         conn.execute("DROP TABLE IF EXISTS memberships")
         conn.execute("DROP TABLE IF EXISTS payments")
         conn.execute("DROP TABLE IF EXISTS membership_packages")
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS payroll_policy (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                payload TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                effective_date TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                updated_by TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS payroll_policy_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                actor TEXT NOT NULL,
+                old_value TEXT,
+                new_value TEXT,
+                effective_date TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS employee_payroll (
+                employee_id TEXT PRIMARY KEY,
+                monthly_salary TEXT NOT NULL DEFAULT '0',
+                divisor_override TEXT,
+                leave_allowance_override TEXT,
+                shift_id_override INTEGER,
+                unused_leave_eligible INTEGER,
+                effective_date TEXT,
+                allowances_json TEXT NOT NULL DEFAULT '[]',
+                updated_at TEXT,
+                updated_by TEXT
+            );
+            CREATE TABLE IF NOT EXISTS employee_salary_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id TEXT NOT NULL,
+                monthly_salary TEXT NOT NULL,
+                effective_date TEXT NOT NULL,
+                actor TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS leave_ledger (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id TEXT NOT NULL,
+                work_date TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                days TEXT NOT NULL DEFAULT '1',
+                minutes INTEGER NOT NULL DEFAULT 0,
+                note TEXT,
+                actor TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS leave_balances (
+                employee_id TEXT NOT NULL,
+                year TEXT NOT NULL,
+                carried TEXT NOT NULL DEFAULT '0',
+                paid_out TEXT NOT NULL DEFAULT '0',
+                PRIMARY KEY (employee_id, year)
+            );
+            CREATE TABLE IF NOT EXISTS payroll_periods (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                status TEXT NOT NULL,
+                policy_snapshot TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                created_by TEXT NOT NULL,
+                approved_at TEXT,
+                approved_by TEXT,
+                finalized_at TEXT,
+                finalized_by TEXT,
+                UNIQUE(start_date, end_date)
+            );
+            CREATE TABLE IF NOT EXISTS payroll_rows (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                period_id INTEGER NOT NULL,
+                employee_id TEXT NOT NULL,
+                snapshot TEXT NOT NULL,
+                net_pay TEXT NOT NULL,
+                UNIQUE(period_id, employee_id)
+            );
+            CREATE TABLE IF NOT EXISTS payroll_adjustments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                period_id INTEGER,
+                employee_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                amount TEXT NOT NULL,
+                note TEXT,
+                actor TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'approved'
+            );
+            CREATE TABLE IF NOT EXISTS payroll_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                actor TEXT NOT NULL,
+                action TEXT NOT NULL,
+                entity TEXT NOT NULL,
+                entity_id TEXT,
+                old_value TEXT,
+                new_value TEXT,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS leave_payouts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id TEXT NOT NULL,
+                period_id INTEGER NOT NULL,
+                year TEXT NOT NULL,
+                days TEXT NOT NULL,
+                amount TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(employee_id, period_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_leave_ledger_emp ON leave_ledger(employee_id, work_date);
+            CREATE INDEX IF NOT EXISTS idx_salary_hist_emp ON employee_salary_history(employee_id, effective_date);
+            """
+        )
 
 
 def face_premium_enabled() -> bool:
@@ -224,6 +344,15 @@ def set_face_premium(on: bool) -> bool:
             ("1" if on else "0",),
         )
     return on
+
+
+def normalize_work_type(value: str | None) -> str:
+    text = (value or "").strip().lower().replace("-", " ").replace("_", " ")
+    if text in {"part", "part time", "parttime"}:
+        return "part"
+    if text in {"leader", "team leader", "teamleader"}:
+        return "leader"
+    return "full"
 
 
 def add_employee(
@@ -267,11 +396,13 @@ def list_employees() -> list[dict]:
             SELECT e.id, e.employee_id, e.name, e.created_at, e.shift_id,
                    e.phone, e.emergency_name, e.emergency_phone,
                    e.email, e.job_title, e.department, e.branch,
-                   e.employment_status, e.joining_date, e.manager,
+                   e.employment_status, e.joining_date, e.manager, e.work_type,
                    s.name AS shift_name, s.start_time, s.end_time,
-                   CASE WHEN e.has_face = 0 THEN 0 ELSE 1 END AS has_face
+                   CASE WHEN e.has_face = 0 THEN 0 ELSE 1 END AS has_face,
+                   ep.monthly_salary AS monthly_salary
             FROM employees e
             LEFT JOIN shifts s ON s.id = e.shift_id
+            LEFT JOIN employee_payroll ep ON ep.employee_id = e.employee_id
             ORDER BY e.name
             """
         ).fetchall()
@@ -346,6 +477,7 @@ def update_employee(
     employment_status: str | None = None,
     joining_date: str | None = None,
     manager: str | None = None,
+    work_type: str | None = None,
 ) -> dict | None:
     current = next((e for e in list_employees() if e["employee_id"] == employee_id.strip()), None)
     if current is None:
@@ -396,6 +528,11 @@ def update_employee(
             """,
             (email, job_title, department, branch, employment_status, joining_date, manager, next_id),
         )
+        if work_type is not None:
+            conn.execute(
+                "UPDATE employees SET work_type = ? WHERE employee_id = ?",
+                (normalize_work_type(work_type), next_id),
+            )
         conn.execute(
             """
             UPDATE work_sessions
@@ -404,6 +541,15 @@ def update_employee(
             """,
             (next_id, next_name, employee_id.strip()),
         )
+        if next_id != employee_id.strip():
+            conn.execute(
+                "UPDATE employee_payroll SET employee_id = ? WHERE employee_id = ?",
+                (next_id, employee_id.strip()),
+            )
+            conn.execute(
+                "UPDATE employee_salary_history SET employee_id = ? WHERE employee_id = ?",
+                (next_id, employee_id.strip()),
+            )
     return next((e for e in list_employees() if e["employee_id"] == next_id), None)
 
 
@@ -413,6 +559,38 @@ def delete_employee(employee_id: str) -> bool:
         conn.execute("DELETE FROM work_sessions WHERE employee_id = ?", (eid,))
         cur = conn.execute("DELETE FROM employees WHERE employee_id = ?", (eid,))
         return cur.rowcount > 0
+
+
+def reset_people_data() -> dict[str, int]:
+    """Remove employees, attendance, and per-person payroll. Keeps admins, shifts, and settings."""
+    tables = (
+        "payroll_rows",
+        "payroll_adjustments",
+        "payroll_audit",
+        "payroll_periods",
+        "leave_payouts",
+        "leave_ledger",
+        "leave_balances",
+        "employee_salary_history",
+        "employee_payroll",
+        "attendance_audit",
+        "work_sessions",
+        "employees",
+    )
+    counts: dict[str, int] = {}
+    with get_connection() as conn:
+        for table in tables:
+            try:
+                n = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                conn.execute(f"DELETE FROM {table}")
+                counts[table] = int(n or 0)
+            except sqlite3.OperationalError:
+                counts[table] = 0
+        conn.execute(
+            "INSERT INTO gym_settings (key, value) VALUES ('company_name', 'Bunker Attendance') "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+    return counts
 
 
 def find_shift_session(employee_id: str, work_date: str, shift_id: int | None) -> dict | None:
@@ -532,14 +710,15 @@ def count_admins() -> int:
     return int(n)
 
 
-def add_admin(username: str, password_hash: str) -> dict:
-    if count_admins() >= MAX_ADMINS:
+def add_user(username: str, password_hash: str, role: str = "admin") -> dict:
+    role = "leader" if role == "leader" else "admin"
+    if role == "admin" and count_admins() >= MAX_ADMINS:
         raise ValueError(f"Maximum of {MAX_ADMINS} admins")
     now = datetime.now().isoformat()
     with get_connection() as conn:
         cur = conn.execute(
-            "INSERT INTO users (username, password_hash, created_at, role) VALUES (?, ?, ?, 'admin')",
-            (username.strip(), password_hash, now),
+            "INSERT INTO users (username, password_hash, created_at, role) VALUES (?, ?, ?, ?)",
+            (username.strip(), password_hash, now, role),
         )
         row = conn.execute(
             "SELECT id, username, role, created_at FROM users WHERE id = ?",
@@ -559,13 +738,13 @@ def get_user_by_id(user_id: int) -> dict | None:
 
 def update_admin(user_id: int, *, username: str | None = None, password_hash: str | None = None) -> dict | None:
     current = get_user_by_id(user_id)
-    if current is None or current.get("role") == "super":
+    if current is None or current.get("role") not in {"admin", "leader"}:
         return None
     next_name = (username or current["username"]).strip()
     next_hash = password_hash or current["password_hash"]
     with get_connection() as conn:
         conn.execute(
-            "UPDATE users SET username = ?, password_hash = ? WHERE id = ? AND role = 'admin'",
+            "UPDATE users SET username = ?, password_hash = ? WHERE id = ? AND role IN ('admin', 'leader')",
             (next_name, next_hash, user_id),
         )
     updated = get_user_by_id(user_id)
@@ -583,7 +762,31 @@ def set_super_password(password_hash: str) -> bool:
 
 def delete_admin(user_id: int) -> bool:
     with get_connection() as conn:
-        cur = conn.execute("DELETE FROM users WHERE id = ? AND role = 'admin'", (user_id,))
+        cur = conn.execute("DELETE FROM users WHERE id = ? AND role IN ('admin', 'leader')", (user_id,))
+        return cur.rowcount > 0
+
+
+def list_day_leave(work_date: str, kind: str = "unpermitted") -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT l.id, l.employee_id, l.work_date, l.kind, l.actor, e.name AS employee_name
+            FROM leave_ledger l
+            LEFT JOIN employees e ON e.employee_id = l.employee_id
+            WHERE l.work_date = ? AND l.kind = ?
+            ORDER BY e.name
+            """,
+            (work_date, kind),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def delete_day_leave(employee_id: str, work_date: str, kind: str = "unpermitted") -> bool:
+    with get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM leave_ledger WHERE employee_id = ? AND work_date = ? AND kind = ?",
+            (employee_id.strip(), work_date, kind),
+        )
         return cur.rowcount > 0
 
 
@@ -758,6 +961,7 @@ def set_employee_profile(
     employment_status: str = "",
     joining_date: str = "",
     manager: str = "",
+    work_type: str | None = None,
 ) -> None:
     with get_connection() as conn:
         conn.execute(
@@ -778,6 +982,11 @@ def set_employee_profile(
                 employee_id.strip(),
             ),
         )
+        if work_type is not None:
+            conn.execute(
+                "UPDATE employees SET work_type = ? WHERE employee_id = ?",
+                (normalize_work_type(work_type), employee_id.strip()),
+            )
 
 
 def set_employment_status(employee_id: str, status: str) -> None:

@@ -43,8 +43,9 @@ function renderDots() {
 }
 
 function applyRole(role) {
-  currentRole = role === "super" ? "super" : "admin";
+  currentRole = role === "super" ? "super" : role === "leader" ? "leader" : "admin";
   document.body.classList.toggle("is-super", currentRole === "super");
+  document.body.classList.toggle("is-leader", currentRole === "leader");
 }
 
 function showApp(ok) {
@@ -87,7 +88,18 @@ if (logoutBtn) logoutBtn.addEventListener("click", () => {
   stopStream(stream);
 });
 
+function fieldVal(id) {
+  const node = document.getElementById(id);
+  return node ? node.value.trim() : "";
+}
+
+function setField(id, value) {
+  const node = document.getElementById(id);
+  if (node) node.value = value == null ? "" : value;
+}
+
 async function loadShiftsIntoSelect() {
+  if (!shiftSelect) return [];
   const shifts = await api("/shifts");
   shiftSelect.innerHTML =
     `<option value="">Auto at entrance</option>` +
@@ -96,6 +108,17 @@ async function loadShiftsIntoSelect() {
 }
 
 async function showPage(key) {
+  if (currentRole === "leader" && key !== "attendance") {
+    key = "attendance";
+  }
+  if (key === "payroll" || key === "branches" || key === "devices" || key === "integrations") {
+    key = "dashboard";
+    try {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, "", "/admin?page=dashboard");
+      }
+    } catch (err) {}
+  }
   pages.forEach((p) => {
     const on = p.id === "page-" + key;
     p.classList.toggle("active", on);
@@ -140,50 +163,47 @@ async function showPage(key) {
   if (typeof window.codaiOnPage === "function") window.codaiOnPage(key);
 }
 
+function syncLeaderFields() {
+  const typeEl = document.getElementById("enroll-type");
+  const on = typeEl && typeEl.value === "leader";
+  ["leader-user-label", "leader-pass-label"].forEach((id) => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    node.hidden = !on;
+  });
+}
+
 function setEditing(person) {
   editingId = person ? person.employee_id : null;
-  document.getElementById("edit-banner").classList.toggle("hidden", !person);
-  document.getElementById("btn-save-person").classList.toggle("hidden", !person);
-  document.getElementById("btn-cancel-edit").classList.toggle("hidden", !person);
+  const banner = document.getElementById("edit-banner");
+  const saveBtn = document.getElementById("btn-save-person");
+  const cancelBtn = document.getElementById("btn-cancel-edit");
+  if (banner) banner.classList.toggle("hidden", !person);
+  if (saveBtn) saveBtn.classList.toggle("hidden", !person);
+  if (cancelBtn) cancelBtn.classList.toggle("hidden", !person);
   if (!person) {
-    document.getElementById("enroll-name").value = "";
-    document.getElementById("enroll-id").value = "";
-    document.getElementById("enroll-phone").value = "";
-    document.getElementById("enroll-em-name").value = "";
-    document.getElementById("enroll-em-phone").value = "";
-    ["enroll-email", "enroll-title", "enroll-dept", "enroll-manager"].forEach(function (id) {
-      var n = document.getElementById(id);
-      if (n) n.value = "";
-    });
-    var b = document.getElementById("enroll-branch");
-    if (b) b.value = "HQ";
-    var st = document.getElementById("enroll-status");
-    if (st) st.value = "active";
-    var jd = document.getElementById("enroll-joined");
-    if (jd) jd.value = "";
-    shiftSelect.value = "";
+    setField("enroll-name", "");
+    setField("enroll-id", "");
+    setField("enroll-phone", "");
+    setField("enroll-title", "");
+    setField("enroll-salary", "");
+    const blankType = document.getElementById("enroll-type");
+    if (blankType) blankType.value = "full";
+    setField("enroll-leader-user", "");
+    setField("enroll-leader-pass", "");
+    syncLeaderFields();
+    if (shiftSelect) shiftSelect.value = "";
     return;
   }
-  document.getElementById("enroll-name").value = person.name;
-  document.getElementById("enroll-id").value = person.employee_id;
-  document.getElementById("enroll-phone").value = person.phone || "";
-  document.getElementById("enroll-em-name").value = person.emergency_name || "";
-  document.getElementById("enroll-em-phone").value = person.emergency_phone || "";
-  const emailEl = document.getElementById("enroll-email");
-  if (emailEl) emailEl.value = person.email || "";
-  const titleEl = document.getElementById("enroll-title");
-  if (titleEl) titleEl.value = person.job_title || "";
-  const deptEl = document.getElementById("enroll-dept");
-  if (deptEl) deptEl.value = person.department || "";
-  const branchEl = document.getElementById("enroll-branch");
-  if (branchEl) branchEl.value = person.branch || "HQ";
-  const mgrEl = document.getElementById("enroll-manager");
-  if (mgrEl) mgrEl.value = person.manager || "";
-  const stEl = document.getElementById("enroll-status");
-  if (stEl) stEl.value = person.employment_status || "active";
-  const joinedEl = document.getElementById("enroll-joined");
-  if (joinedEl) joinedEl.value = person.joining_date || "";
-  shiftSelect.value = person.shift_id != null ? String(person.shift_id) : "";
+  setField("enroll-name", person.name);
+  setField("enroll-id", person.employee_id);
+  setField("enroll-phone", person.phone || "");
+  setField("enroll-title", person.job_title || "");
+  const typeEl = document.getElementById("enroll-type");
+  if (typeEl) typeEl.value = person.work_type === "part" ? "part" : person.work_type === "leader" ? "leader" : "full";
+  syncLeaderFields();
+  setField("enroll-salary", person.monthly_salary || "");
+  if (shiftSelect) shiftSelect.value = person.shift_id != null ? String(person.shift_id) : "";
 }
 
 function stopAuto() {
@@ -228,18 +248,26 @@ async function captureOnce() {
 
 function extraContact() {
   return {
-    phone: document.getElementById("enroll-phone").value.trim(),
-    emergency_name: document.getElementById("enroll-em-name").value.trim(),
-    emergency_phone: document.getElementById("enroll-em-phone").value.trim(),
+    phone: fieldVal("enroll-phone"),
   };
 }
 
 function personPayload(includeFace) {
-  const name = document.getElementById("enroll-name").value.trim();
-  const employee_id = document.getElementById("enroll-id").value.trim();
-  const rawShift = shiftSelect.value;
+  const name = fieldVal("enroll-name");
+  const employee_id = fieldVal("enroll-id");
+  const rawShift = shiftSelect ? shiftSelect.value : "";
   const shift_id = rawShift ? Number(rawShift) : null;
-  const body = { name, employee_id, shift_id, ...extraContact() };
+  const body = {
+    name,
+    employee_id,
+    shift_id,
+    job_title: fieldVal("enroll-title"),
+    work_type: (document.getElementById("enroll-type") && document.getElementById("enroll-type").value) || "full",
+    leader_username: fieldVal("enroll-leader-user"),
+    leader_password: fieldVal("enroll-leader-pass"),
+    monthly_salary: fieldVal("enroll-salary"),
+    ...extraContact(),
+  };
   if (includeFace) body.images_b64 = captures;
   return body;
 }
@@ -255,8 +283,11 @@ async function issuePass() {
           new_employee_id: body.employee_id,
           shift_id: body.shift_id,
           phone: body.phone,
-          emergency_name: body.emergency_name,
-          emergency_phone: body.emergency_phone,
+          job_title: body.job_title,
+          work_type: body.work_type,
+          leader_username: body.leader_username,
+          leader_password: body.leader_password,
+          monthly_salary: body.monthly_salary,
           images_b64: captures,
         }),
       });
@@ -274,9 +305,17 @@ async function issuePass() {
     successEl.classList.remove("hidden");
     captures = [];
     renderDots();
-    document.getElementById("enroll-name").value = "";
-    document.getElementById("enroll-id").value = "";
-    shiftSelect.value = "";
+    setField("enroll-name", "");
+    setField("enroll-id", "");
+    setField("enroll-phone", "");
+    setField("enroll-title", "");
+    setField("enroll-salary", "");
+    setField("enroll-leader-user", "");
+    setField("enroll-leader-pass", "");
+    const savedType = document.getElementById("enroll-type");
+    if (savedType) savedType.value = "full";
+    syncLeaderFields();
+    if (shiftSelect) shiftSelect.value = "";
     stopAuto();
     setTimeout(() => successEl.classList.add("hidden"), 2500);
   } catch (e) {
@@ -377,6 +416,7 @@ function reportQuery() {
 }
 
 async function loadDashboard() {
+  if (typeof window.codaiOnPage === "function") return;
   const cards = document.getElementById("dash-cards");
   const weekEl = document.getElementById("dash-week");
   const onsite = document.getElementById("dash-onsite");
@@ -426,45 +466,43 @@ async function loadReports() {
   const data = await api(`/reports?work_date=${day}&period=${period}`);
   const summary = data.summary || {};
   const range = document.getElementById("report-range");
-  const avgHint =
-    data.period === "monthly"
-      ? ` · Avg ${summary.avg_formatted || "—"} per employee`
-      : "";
-  range.innerHTML = `${data.period} · ${data.date_from} to ${data.date_to} · ${summary.closed || 0} closed sessions · ${summary.total_formatted || "0:00"} total${avgHint}`;
+  const avgHint = summary.avg_formatted ? ` · Avg ${summary.avg_formatted} per employee` : "";
+  const payHint = summary.net_formatted ? ` · ${summary.net_formatted}` : "";
+  range.innerHTML = `${data.period} · ${data.date_from} to ${data.date_to} · ${summary.closed || 0} closed sessions · ${summary.total_formatted || "0:00"} total${avgHint}${payHint}`;
   const sumEl = document.getElementById("report-summary");
   if (sumEl) {
     sumEl.innerHTML = [
       ["Sessions", summary.sessions || 0],
       ["Total hours", summary.total_formatted || "0:00"],
       ["Avg / employee", summary.avg_formatted || "—"],
-      data.period === "monthly" ? ["People", (summary.employees || []).length] : null,
+      ["People", (summary.employees || []).length],
+      ["Net salary", summary.net_formatted || "—"],
     ]
-      .filter(Boolean)
       .map(([k, v]) => `<article class="stat-card"><p class="eyebrow">${k}</p><strong>${v}</strong></article>`)
       .join("");
   }
   const avgWrap = document.getElementById("report-avg-wrap");
   const avgBody = document.getElementById("report-avg-body");
   if (avgWrap && avgBody) {
-    const showAvg = data.period === "monthly";
-    avgWrap.classList.toggle("hidden", !showAvg);
-    if (showAvg) {
-      const people = summary.employees || [];
-      avgBody.innerHTML = people.length
-        ? people
-            .map(
-              (p) => `<tr>
+    avgWrap.classList.remove("hidden");
+    const people = summary.employees || [];
+    avgBody.innerHTML = people.length
+      ? people
+          .map(function (p) {
+            const cur = p.currency || "EGP";
+            return `<tr>
                 <td>${p.employee_name}</td>
                 <td>${p.employee_id}</td>
                 <td>${p.days_worked}</td>
                 <td>${p.sessions}</td>
                 <td>${p.total_formatted}</td>
                 <td>${p.avg_formatted}</td>
-              </tr>`
-            )
-            .join("")
-        : `<tr><td colspan="6" class="muted">No closed sessions this month.</td></tr>`;
-    }
+                <td>${cur} ${p.base_salary || "0.00"}</td>
+                <td>${cur} ${p.net_pay || "0.00"}</td>
+              </tr>`;
+          })
+          .join("")
+      : `<tr><td colspan="8" class="muted">No employees in this period.</td></tr>`;
   }
   const body = document.getElementById("report-body");
   if (!data.rows.length) {
@@ -499,18 +537,23 @@ async function loadPeople() {
   const body = document.getElementById("people-body");
   const people = await api("/passes");
   if (!people.length) {
-    body.innerHTML = `<tr><td colspan="6" class="muted">No employees yet.</td></tr>`;
+    body.innerHTML = `<tr><td colspan="9" class="muted">No employees yet.</td></tr>`;
     return;
   }
   body.innerHTML = people
     .map((p) => `<tr>
-        <td>${p.name}</td>
         <td>${p.employee_id}</td>
+        <td>${p.name}</td>
+        <td>${p.job_title || "—"}</td>
+        <td>${p.work_type === "part" ? "Part time" : p.work_type === "leader" ? "Team leader" : "Full time"}</td>
         <td>${p.phone || "—"}</td>
-        <td>${p.shift_name || "Auto at clock-in"}</td>
+        <td>${p.monthly_salary || "—"}</td>
         <td>${p.has_face ? "Yes" : "No"}</td>
+        <td>${p.employment_status || "active"}</td>
         <td class="people-actions">
           <button class="ghost small-del" type="button" data-edit-person="${p.employee_id}">Edit</button>
+          <button class="ghost small-del" type="button" data-emp-att="${p.employee_id}">Attendance</button>
+          <button class="ghost small-del" type="button" data-emp-rep="${p.employee_id}">Report</button>
           <button class="ghost small-del danger" type="button" data-del-person="${p.employee_id}">Delete</button>
         </td>
       </tr>`)
@@ -552,7 +595,7 @@ async function loadStaff() {
   const body = document.getElementById("staff-body");
   body.innerHTML = data.users
     .map((u) => {
-      const role = u.role === "super" ? "Super admin" : "Admin";
+      const role = u.role === "leader" ? "Team leader" : "Admin";
       const actions =
         u.role === "super"
           ? `<span class="muted">You</span>`
@@ -573,7 +616,7 @@ document.getElementById("staff-body").addEventListener("click", async (e) => {
   const del = e.target.closest("[data-del-staff]");
   const reset = e.target.closest("[data-reset-staff]");
   if (del) {
-    if (!confirm("Remove this admin?")) return;
+    if (!confirm("Remove this user?")) return;
     try {
       await api(`/staff/${del.getAttribute("data-del-staff")}`, { method: "DELETE" });
       status.textContent = "Admin removed.";
@@ -608,11 +651,16 @@ try {
 }
 ensureAuth()
   .then(function (ok) {
-    if (ok) return showPage(bootPage);
+    if (!ok) return;
+    if (currentRole === "leader" && !pageMatch) bootPage = "attendance";
+    return showPage(bootPage);
   })
   .catch(function () {});
 try {
   renderDots();
+  const typePick = document.getElementById("enroll-type");
+  if (typePick) typePick.addEventListener("change", syncLeaderFields);
+  syncLeaderFields();
 } catch (err) {
   /* enroll widgets optional on first paint */
 }

@@ -316,6 +316,21 @@ class ExportTests(unittest.TestCase):
             self.assertIn("EMP-001", people.text)
             self.assertNotIn("EMP-005", people.text)
 
+    def test_employee_summary_includes_calculated_salary(self):
+        from core import payroll, reports
+        from core.exports import collect
+
+        payroll.save_profile("EMP-001", {"monthly_salary": "6000"}, "tester")
+        rows, start, end, _kind = reports.report_rows("monthly", "2026-10-01")
+        summary = reports.summarize(rows, start, end)
+        ahmed = next(p for p in summary["employees"] if p["employee_id"] == "EMP-001")
+        self.assertGreater(float(ahmed["base_salary"]), 0)
+        self.assertGreaterEqual(float(ahmed["net_pay"]), 0)
+        self.assertIn("currency", ahmed)
+        exported = collect(self._params(employee_id="EMP-001"))
+        self.assertGreater(float(exported["summary"][0]["base_salary"]), 0)
+        self.assertGreaterEqual(float(exported["summary"][0]["net_pay"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

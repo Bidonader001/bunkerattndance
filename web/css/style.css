@@ -106,21 +106,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
 .logo {
   width: 56px;
   height: 56px;
-  border-radius: var(--radius);
+  border-radius: 8px;
   object-fit: contain;
-  margin: 0 auto 16px;
+  margin: 0 auto 12px;
   display: block;
-  background: var(--card);
-  border: 1px solid var(--line);
-  padding: 6px;
+  background: #000;
+  border: 0;
+  padding: 0;
 }
 .brand-name {
   font-family: var(--display);
   font-weight: 600;
   letter-spacing: -0.4px;
-  font-size: 18px;
+  font-size: 15px;
+  line-height: 1.25;
   text-align: center;
-  margin: 0 0 18px;
+  margin: 0 0 4px;
   color: var(--ink);
   text-transform: none;
 }
@@ -443,6 +444,7 @@ button:disabled { opacity: 0.38; cursor: not-allowed; transform: none; }
 .super-only { display: none !important; }
 body.is-super .super-only { display: block !important; }
 body.is-super .nav-btn.super-only { display: flex !important; align-items: center; justify-content: center; }
+body.is-leader .admin-only { display: none !important; }
 .staff-own { margin-top: 28px; font-size: 20px; }
 
 .scan-status {
@@ -536,10 +538,12 @@ body.is-authed #app-shell {
   width: 120px;
   width: min(120px, 28vw);
   height: auto;
-  border-radius: var(--radius);
-  background: var(--card);
-  border: 1px solid var(--line);
-  padding: 10px;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #000;
+  border: 0;
+  padding: 0;
 }
 .login-hero p {
   margin: 0;
@@ -560,7 +564,7 @@ body.is-authed #app-shell {
   gap: 12px;
   padding: 36px 32px;
 }
-.login-card img { width: 64px; align-self: center; margin-bottom: 8px; border-radius: 0; }
+.login-card img { width: 64px; height: 64px; object-fit: contain; align-self: center; margin-bottom: 8px; border-radius: 8px; background: #000; }
 .login-card h1 { margin-bottom: 8px; }
 .login-card button.primary { width: 100%; margin-top: 8px; }
 
@@ -614,10 +618,12 @@ body.is-authed #app-shell {
   width: 120px;
   width: min(120px, 40vw);
   height: auto;
-  border-radius: var(--radius);
-  background: var(--card);
-  border: 1px solid var(--line);
-  padding: 14px;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #000;
+  border: 0;
+  padding: 0;
 }
 .landing .brand-name {
   color: var(--ink);
@@ -1094,7 +1100,7 @@ body[data-state="camera"] .state-chip::before { background: var(--warn); }
     padding: 24px 20px 40px;
     margin: 0 auto max(24px, env(safe-area-inset-bottom));
   }
-  .login-card img { width: 72px; }
+  .login-card img { width: 72px; height: 72px; }
   .login-card h1 { font-size: 28px; }
 
   .actions { gap: 8px; }
@@ -1206,6 +1212,10 @@ body[data-state="camera"] .state-chip::before { background: var(--warn); }
   }
   .kiosk-panel { padding: 18px; }
 }
+
+#pay-table tr[data-pay-eid] { cursor: pointer; }
+#pay-detail ul { margin: 8px 0 12px; padding-left: 18px; }
+#pay-cards.stats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* Absence Less console chrome */
 .page { max-width: 1280px; }
@@ -1350,7 +1360,7 @@ body.is-super .nav-btn.super-only { justify-content: flex-start; }
   background: rgba(51, 51, 51, 0.45);
   z-index: 200;
 }
-#correct-dialog, #help-dialog, #export-dialog { border: 1px solid var(--line); color: var(--ink); }
+#help-dialog, #export-dialog { border: 1px solid var(--line); color: var(--ink); }
 #export-dialog {
   width: min(720px, 94vw);
   max-height: 90vh;
@@ -1728,8 +1738,7 @@ html.night .kiosk-bar .ghost[aria-pressed="true"] {
   border-color: #be3700;
 }
 html.night #export-dialog,
-html.night #help-dialog,
-html.night #correct-dialog {
+html.night #help-dialog {
   background: #262626;
   color: #fafafa;
   border-color: rgba(255, 255, 255, 0.1);
@@ -1757,4 +1766,271 @@ html.night #help-dialog p {
   background: var(--secondary);
   color: var(--ink);
   border-color: var(--line);
+}
+
+/* Kiosk Retro-Futurism (design 4) — scoped so admin stays unchanged */
+html body.kiosk,
+html.night body.kiosk {
+  font-family: "Share Tech Mono", "JetBrains Mono", ui-monospace, monospace;
+  background: #000;
+  color: #c0c0c0;
+  min-height: 100%;
+}
+html body.kiosk .kiosk-gridbg,
+html.night body.kiosk .kiosk-gridbg {
+  display: none;
+}
+html body.kiosk .kiosk-scanlines,
+html.night body.kiosk .kiosk-scanlines {
+  pointer-events: none;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 255, 255, 0.05) 3px
+  );
+}
+html body.kiosk .kiosk-bar,
+html body.kiosk .kiosk-main,
+html.night body.kiosk .kiosk-bar,
+html.night body.kiosk .kiosk-main {
+  position: relative;
+  z-index: 1;
+}
+html body.kiosk .kiosk-bar,
+html.night body.kiosk .kiosk-bar {
+  background: #000;
+  color: #c0c0c0;
+  border-bottom: 1px solid #5d34d0;
+  box-shadow: none;
+}
+html body.kiosk .kiosk-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+html body.kiosk .kiosk-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+html body.kiosk .kiosk-wordmark {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: none;
+}
+html body.kiosk .kiosk-byline {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  color: #c0c0c0;
+}
+html body.kiosk .kiosk-bar img,
+html.night body.kiosk .kiosk-bar img {
+  height: 52px;
+  width: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #000;
+  box-shadow: none;
+  object-fit: contain;
+}
+html body.kiosk .kiosk-time,
+html.night body.kiosk .kiosk-time {
+  color: #00ffff;
+  letter-spacing: 0.08em;
+}
+html body.kiosk .kiosk-bar a,
+html.night body.kiosk .kiosk-bar a {
+  color: #00ffff;
+  opacity: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+html body.kiosk .kiosk-bar .ghost,
+html.night body.kiosk .kiosk-bar .ghost,
+html.night body.kiosk .kiosk-bar a.ghost {
+  color: #00ffff;
+  border: 1.5px solid #0080ff;
+  background: transparent;
+  height: 40px;
+  min-width: 72px;
+  border-radius: 8px;
+}
+html body.kiosk .kiosk-bar .ghost[aria-pressed="true"],
+html.night body.kiosk .kiosk-bar .ghost[aria-pressed="true"] {
+  background: #0080ff;
+  color: #1a1a2e;
+  border-color: #0080ff;
+}
+html body.kiosk .kiosk-cam,
+html.night body.kiosk .kiosk-cam {
+  background: #0d0d18;
+  border: 1px solid #00ffff;
+  box-shadow: 0 0 22px rgba(0, 255, 255, 0.28), 0 0 48px rgba(93, 52, 208, 0.2);
+  border-radius: 8px;
+}
+html body.kiosk .kiosk-cam .corners {
+  background:
+    linear-gradient(#00ffff, #00ffff) top left / 28px 2px no-repeat,
+    linear-gradient(#00ffff, #00ffff) top left / 2px 28px no-repeat,
+    linear-gradient(#0080ff, #0080ff) top right / 28px 2px no-repeat,
+    linear-gradient(#0080ff, #0080ff) top right / 2px 28px no-repeat,
+    linear-gradient(#ff006e, #ff006e) bottom left / 28px 2px no-repeat,
+    linear-gradient(#ff006e, #ff006e) bottom left / 2px 28px no-repeat,
+    linear-gradient(#ff10f0, #ff10f0) bottom right / 28px 2px no-repeat,
+    linear-gradient(#ff10f0, #ff10f0) bottom right / 2px 28px no-repeat;
+}
+html body.kiosk .kiosk-cam .scan-line {
+  background: linear-gradient(90deg, transparent, #00ffff, transparent);
+  box-shadow: 0 0 12px #00ffff;
+  opacity: 0.85;
+}
+html body.kiosk .kiosk-panel,
+html.night body.kiosk .kiosk-panel {
+  background: #000;
+  border: 1px solid #5d34d0;
+  border-radius: 8px;
+  box-shadow: none;
+  color: #c0c0c0;
+}
+html body.kiosk .kiosk-panel h1,
+html.night body.kiosk .kiosk-panel h1,
+html body.kiosk #hello {
+  color: #ff10f0;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  text-shadow: 0 0 14px rgba(255, 16, 240, 0.45), 2px 0 #00ffff;
+  animation: kiosk-glitch 6.2s ease-out infinite;
+}
+html body.kiosk .kiosk-panel .lede,
+html body.kiosk .kiosk-panel .scan-status,
+html.night body.kiosk .kiosk-panel .lede {
+  color: #c0c0c0;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+html body.kiosk .state-chip,
+html.night body.kiosk .state-chip {
+  background: transparent;
+  color: #00ffff;
+  border: 1px solid #00ffff;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-radius: 8px;
+}
+html body.kiosk .state-chip::before {
+  background: #00ffff;
+  box-shadow: 0 0 8px #00ffff;
+}
+html body.kiosk[data-state="clocked-in"] .state-chip,
+html body.kiosk[data-state="inside"] .state-chip {
+  color: #ffd700;
+  border-color: #ffd700;
+  background: transparent;
+}
+html body.kiosk[data-state="clocked-in"] .state-chip::before,
+html body.kiosk[data-state="inside"] .state-chip::before {
+  background: #ffd700;
+  box-shadow: 0 0 8px #ffd700;
+}
+html body.kiosk[data-state="clocked-out"] .state-chip,
+html body.kiosk[data-state="done"] .state-chip,
+html body.kiosk[data-state="cooldown"] .state-chip {
+  color: #0080ff;
+  border-color: #0080ff;
+  background: transparent;
+}
+html body.kiosk[data-state="unknown"] .state-chip,
+html body.kiosk[data-state="error"] .state-chip,
+html body.kiosk[data-state="camera"] .state-chip {
+  color: #ff006e;
+  border-color: #ff006e;
+  background: transparent;
+}
+html body.kiosk[data-state="unknown"] .state-chip::before,
+html body.kiosk[data-state="error"] .state-chip::before,
+html body.kiosk[data-state="camera"] .state-chip::before {
+  background: #ff006e;
+}
+html body.kiosk .kiosk-panel .primary,
+html body.kiosk .modal .primary,
+html.night body.kiosk button.primary {
+  background: #0080ff;
+  color: #1a1a2e;
+  border: 0;
+  border-radius: 8px;
+  font-weight: 600;
+  box-shadow: 0 2px 12px rgba(0, 128, 255, 0.35);
+}
+html body.kiosk .kiosk-panel .primary:hover,
+html body.kiosk .modal .primary:hover {
+  background: #0066cc;
+}
+html body.kiosk .kiosk-panel .primary:active,
+html body.kiosk .modal .primary:active {
+  transform: translateY(1px);
+}
+html body.kiosk .cam-gate,
+html.night body.kiosk .cam-gate {
+  background: rgba(0, 0, 0, 0.88);
+  color: #00ffff;
+  font-family: "Share Tech Mono", "JetBrains Mono", ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-shadow: 0 0 12px rgba(0, 255, 255, 0.5);
+  border-radius: 8px;
+}
+html body.kiosk .modal,
+html.night body.kiosk .modal {
+  background: rgba(0, 0, 0, 0.88);
+  z-index: 300;
+}
+html body.kiosk .modal-card,
+html.night body.kiosk .modal-card {
+  background: #000;
+  border: 1.5px solid #00ffff;
+  box-shadow: 0 0 28px rgba(0, 255, 255, 0.28);
+  color: #c0c0c0;
+  border-radius: 8px;
+}
+html body.kiosk .modal-card h2,
+html.night body.kiosk .modal-card h2 {
+  color: #ff10f0;
+  text-shadow: 0 0 10px rgba(255, 16, 240, 0.4);
+}
+html body.kiosk .modal-card .eyebrow {
+  color: #00ffff;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+html body.kiosk .modal .ghost,
+html.night body.kiosk .modal .ghost {
+  color: #00ffff;
+  border: 1.5px solid #0080ff;
+  background: transparent;
+}
+@keyframes kiosk-glitch {
+  0%, 88%, 100% { transform: none; }
+  90% { transform: skewX(-8deg) translateX(2px); }
+  92% { transform: none; }
+  94% { transform: skewX(6deg) translateX(-2px); }
+}
+@media (max-width: 768px) {
+  html body.kiosk .kiosk-wordmark { font-size: 0.75rem; }
 }

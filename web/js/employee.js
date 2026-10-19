@@ -235,9 +235,13 @@ function paintClock() {
   if (!el) return;
   el.textContent = new Date().toLocaleString([], {
     weekday: "short",
-    hour: "2-digit",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
     minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
   });
 }
 paintClock();
-setInterval(paintClock, 15000);
+setInterval(paintClock, 1000);

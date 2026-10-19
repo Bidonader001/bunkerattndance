@@ -16,13 +16,102 @@ os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
+
+def _harden_windows_accept() -> None:
+    """Keep listening after a phone drops a half-open connection.
+
+    On Windows, AcceptEx can fail with WinError 64 when a LAN client
+    disconnects during handshake. CPython then closes the listen socket
+    and the process stays up while refusing every new connection.
+    """
+    if os.name != "nt":
+        return
+    import asyncio
+    from asyncio import proactor_events
+
+    loop_cls = proactor_events.BaseProactorEventLoop
+    if getattr(loop_cls, "_bunker_accept_patched", False):
+        return
+
+    transient = {64, 121, 1231, 1236, 10053, 10054}
+
+    def _start_serving(
+        self,
+        protocol_factory,
+        sock,
+        sslcontext=None,
+        server=None,
+        backlog=100,
+        ssl_handshake_timeout=None,
+        ssl_shutdown_timeout=None,
+    ):
+        def loop(f=None):
+            try:
+                if f is not None:
+                    conn, addr = f.result()
+                    protocol = protocol_factory()
+                    if sslcontext is not None:
+                        self._make_ssl_transport(
+                            conn,
+                            protocol,
+                            sslcontext,
+                            server_side=True,
+                            extra={"peername": addr},
+                            server=server,
+                            ssl_handshake_timeout=ssl_handshake_timeout,
+                            ssl_shutdown_timeout=ssl_shutdown_timeout,
+                        )
+                    else:
+                        self._make_socket_transport(
+                            conn,
+                            protocol,
+                            extra={"peername": addr},
+                            server=server,
+                        )
+                if self.is_closed():
+                    return
+                f = self._proactor.accept(sock)
+            except OSError as exc:
+                winerror = getattr(exc, "winerror", None)
+                if winerror in transient and sock.fileno() != -1 and not self.is_closed():
+                    try:
+                        f = self._proactor.accept(sock)
+                    except OSError:
+                        pass
+                    else:
+                        self._accept_futures[sock.fileno()] = f
+                        f.add_done_callback(loop)
+                        return
+                if sock.fileno() != -1:
+                    self.call_exception_handler(
+                        {
+                            "message": "Accept failed on a socket",
+                            "exception": exc,
+                            "socket": sock,
+                        }
+                    )
+                    sock.close()
+            except asyncio.CancelledError:
+                sock.close()
+            else:
+                self._accept_futures[sock.fileno()] = f
+                f.add_done_callback(loop)
+
+        self.call_soon(loop)
+
+    loop_cls._start_serving = _start_serving
+    loop_cls._bunker_accept_patched = True
+
+
+_harden_windows_accept()
+
 from fastapi import Cookie, Depends, FastAPI, Form, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from core import console, db, exports, netinfo, reports
+from core import console, db, exports, netinfo, payroll, reports
 from core.auth import create_token, hash_password, read_token, verify_password
 from core.face_engine import MATCH_THRESHOLD, FaceEngine
 from core.face_quality import validate_enrollment_face
@@ -148,7 +237,7 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="Absence Less", version="2.2.0", lifespan=lifespan)
+app = FastAPI(title="Bunker Attendance Manager", version="2.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -156,6 +245,51 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+_LEADER_GET = {
+    "/api/v1/auth/me",
+    "/api/v1/console/attendance",
+    "/api/v1/attendance/roster",
+}
+
+
+@app.middleware("http")
+async def limit_team_leader(request, call_next):
+    raw = request.cookies.get("access_pass_token") or ""
+    auth = request.headers.get("authorization") or ""
+    if auth.lower().startswith("bearer "):
+        raw = auth.split(" ", 1)[1].strip()
+    if not raw:
+        raw = request.query_params.get("t") or ""
+    user = read_token(raw) if raw else None
+    if user and user.get("role") == "leader":
+        path = request.url.path
+        method = request.method.upper()
+        allowed = method == "GET" and (
+            path in _LEADER_GET
+            or path in {"/", "/admin", "/employee", "/entrance", "/kiosk"}
+            or path.startswith("/static/")
+            or path.startswith("/assets/")
+        )
+        if method == "GET" and path == "/admin/logout":
+            allowed = True
+        if method == "POST" and path in {
+            "/api/v1/attendance/absent",
+            "/api/v1/attendance/day-off",
+            "/admin/logout",
+            "/admin/session",
+            "/api/v1/auth/login",
+        }:
+            allowed = True
+        if method == "DELETE" and path in {"/api/v1/attendance/absent", "/api/v1/attendance/day-off"}:
+            allowed = True
+        if not allowed and (path.startswith("/api/") or path == "/admin/do"):
+            return JSONResponse(
+                {"detail": "Team leaders can only assign a day off or an absence."},
+                status_code=403,
+            )
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -179,6 +313,11 @@ class EnrollBody(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     shift_id: int | None = None
     phone: str = ""
+    job_title: str = ""
+    work_type: str = "full"
+    leader_username: str = ""
+    leader_password: str = ""
+    monthly_salary: str = ""
     emergency_name: str = ""
     emergency_phone: str = ""
     images_b64: list[str] = Field(default_factory=list, max_length=12)
@@ -189,6 +328,11 @@ class EmployeeUpdate(BaseModel):
     new_employee_id: str = Field(min_length=1, max_length=64)
     shift_id: int | None = None
     phone: str | None = None
+    job_title: str | None = None
+    work_type: str | None = None
+    leader_username: str = ""
+    leader_password: str = ""
+    monthly_salary: str | None = None
     emergency_name: str | None = None
     emergency_phone: str | None = None
     images_b64: list[str] | None = None
@@ -208,11 +352,57 @@ class LoginBody(BaseModel):
 class AdminCreateBody(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=6, max_length=128)
+    role: str = "admin"
+
+
+class AbsentBody(BaseModel):
+    employee_id: str = Field(min_length=1, max_length=64)
+    work_date: str = ""
 
 
 class AdminUpdateBody(BaseModel):
     username: str | None = Field(default=None, min_length=1, max_length=64)
     password: str | None = Field(default=None, min_length=6, max_length=128)
+
+
+class PayrollSettingsBody(BaseModel):
+    model_config = {"extra": "allow"}
+
+
+class PayrollProfileBody(BaseModel):
+    monthly_salary: str | None = None
+    divisor_override: str | None = None
+    leave_allowance_override: str | None = None
+    shift_id_override: int | None = None
+    unused_leave_eligible: bool | None = None
+    effective_date: str | None = None
+    allowances: list | None = None
+
+
+class PayrollRangeBody(BaseModel):
+    start_date: str
+    end_date: str
+    employee_id: str = ""
+
+
+class PayrollStatusBody(BaseModel):
+    status: str
+
+
+class PayrollLeaveBody(BaseModel):
+    employee_id: str
+    work_date: str
+    kind: str
+    note: str = ""
+    days: str = "1"
+
+
+class PayrollAdjustmentBody(BaseModel):
+    employee_id: str
+    amount: str
+    kind: str = "bonus"
+    note: str = ""
+    period_id: int | None = None
 
 
 class FaceSettingBody(BaseModel):
@@ -307,7 +497,7 @@ def _single_enroll_face(frame, engine: FaceEngine):
 def health():
     return {
         "status": "healthy",
-        "app": "Absence Less",
+        "app": "Bunker Attendance Manager",
         "models_ready": _engine.is_ready,
         "models_message": None if _engine.is_ready else (_engine.load_error or "loading"),
     }
@@ -528,6 +718,11 @@ def _fill_admin_data(
                 1,
             )
             html = html.replace(
+                'id="enroll-salary" name="monthly_salary" type="number" min="0" step="0.01" value=""',
+                f'id="enroll-salary" name="monthly_salary" type="number" min="0" step="0.01" value="{html_escape(str(person.get("monthly_salary") or ""))}"',
+                1,
+            )
+            html = html.replace(
                 'id="enroll-dept" name="department" type="text" value=""',
                 f'id="enroll-dept" name="department" type="text" value="{html_escape(person.get("department") or "")}"',
                 1,
@@ -609,7 +804,7 @@ def _fill_admin_data(
     if page == "reports":
         kind_in = period or "daily"
         rows, start, end, kind = reports.report_rows(kind_in, work_date or "")
-        summary = reports.summarize(rows)
+        summary = reports.summarize(rows, start, end)
         html = html.replace(
             f'<option value="{kind}">',
             f'<option value="{kind}" selected>',
@@ -693,7 +888,7 @@ def _fill_admin_data(
                     f"<input type='hidden' name='user_id' value='{u['id']}' />"
                     f"<input name='staff_password' type='password' placeholder='New password' required />"
                     f"<button class='ghost small-del' type='submit'>Reset</button></form>"
-                    f"<form method='post' action='/admin/do' class='inline-del' onsubmit=\"return confirm('Remove this admin?');\">"
+                    f"<form method='post' action='/admin/do' class='inline-del' onsubmit=\"return confirm('Remove this user?');\">"
                     f"<input type='hidden' name='action' value='delete_admin' />"
                     f"<input type='hidden' name='t' value='{html_escape(token or '')}' />"
                     f"<input type='hidden' name='user_id' value='{u['id']}' />"
@@ -702,7 +897,7 @@ def _fill_admin_data(
             body_rows.append(
                 "<tr>"
                 f"<td>{html_escape(u.get('username'))}</td>"
-                f"<td>{'Super admin' if u.get('role') == 'super' else 'Admin'}</td>"
+                f"<td>{'Team leader' if u.get('role') == 'leader' else 'Admin'}</td>"
                 f"<td class='people-actions'>{actions}</td></tr>"
             )
         html = html.replace('<tbody id="staff-body"></tbody>', f'<tbody id="staff-body">{"".join(body_rows)}</tbody>', 1)
@@ -722,10 +917,17 @@ def _admin_page(
     edit: str = "",
 ) -> HTMLResponse:
     html = (WEB_DIR / "admin.html").read_text(encoding="utf-8")
+    if role == "leader" and page not in {"dashboard", "attendance"}:
+        page = "attendance"
     if page not in _ADMIN_PAGES:
         page = "dashboard"
     if authed:
-        body_cls = "is-authed is-super" if role == "super" else "is-authed"
+        classes = ["is-authed"]
+        if role == "super":
+            classes.append("is-super")
+        if role == "leader":
+            classes.append("is-leader")
+        body_cls = " ".join(classes)
         html = html.replace("<body>", f'<body class="{body_cls}">', 1)
         html = html.replace('id="login-screen" class="login-screen"', 'id="login-screen" class="login-screen hidden"', 1)
         html = html.replace('id="app-shell" class="app-shell hidden"', 'id="app-shell" class="app-shell"', 1)
@@ -763,7 +965,8 @@ def admin_session(username: str = Form(...), password: str = Form(...)):
         return _admin_page(error=True)
     role = user.get("role") or "admin"
     token = create_token(user["username"], role)
-    return _auth_cookie(_admin_page(authed=True, token=token, page="dashboard", role=role), token)
+    landing = "attendance" if role == "leader" else "dashboard"
+    return _auth_cookie(_admin_page(authed=True, token=token, page=landing, role=role), token)
 
 
 @app.get("/admin/logout")
@@ -802,6 +1005,7 @@ def admin_do(
     end_time: str = Form(default=""),
     staff_username: str = Form(default=""),
     staff_password: str = Form(default=""),
+    staff_role: str = Form(default="admin"),
     new_password: str = Form(default=""),
     user_id: str = Form(default=""),
     email: str = Form(default=""),
@@ -811,6 +1015,10 @@ def admin_do(
     employment_status: str = Form(default=""),
     joining_date: str = Form(default=""),
     manager: str = Form(default=""),
+    monthly_salary: str = Form(default=""),
+    work_type: str = Form(default=""),
+    leader_username: str = Form(default=""),
+    leader_password: str = Form(default=""),
 ):
     raw = (t or access_pass_token or "").strip()
     user = read_token(raw) if raw else None
@@ -842,7 +1050,12 @@ def admin_do(
                     employment_status=employment_status,
                     joining_date=joining_date,
                     manager=manager,
+                    work_type=work_type or None,
                 )
+                _sync_salary(employee_id.strip(), monthly_salary, _payroll_actor(user))
+                leader_err = _save_leader_login(work_type, leader_username, leader_password)
+                if leader_err:
+                    return _admin_redirect("register", raw, leader_err, extra=f"edit={quote(editing_id)}")
                 return _admin_redirect("people", raw, f"{name.strip()} updated.")
             if db.employee_id_exists(employee_id):
                 return _admin_redirect("register", raw, "That employee ID is already used.")
@@ -864,7 +1077,12 @@ def admin_do(
                 employment_status=employment_status,
                 joining_date=joining_date,
                 manager=manager,
+                work_type=work_type or "full",
             )
+            _sync_salary(employee_id.strip(), monthly_salary, _payroll_actor(user))
+            leader_err = _save_leader_login(work_type, leader_username, leader_password)
+            if leader_err:
+                return _admin_redirect("register", raw, leader_err)
             return _admin_redirect("people", raw, f"{name.strip()} saved.")
 
         if action == "delete_person":
@@ -885,8 +1103,10 @@ def admin_do(
         if action == "add_admin":
             if role != "super":
                 return _admin_redirect("dashboard", raw, "Super admin only.")
-            db.add_admin(staff_username, hash_password(staff_password))
-            return _admin_redirect("admins", raw, "Admin added.")
+            chosen = "leader" if staff_role == "leader" else "admin"
+            db.add_user(staff_username, hash_password(staff_password), chosen)
+            label = "Team leader added." if chosen == "leader" else "Admin added."
+            return _admin_redirect("admins", raw, label)
 
         if action == "delete_admin":
             if role != "super":
@@ -936,7 +1156,8 @@ def create_staff(body: AdminCreateBody, _: dict = Depends(require_super)):
     if db.get_user(body.username):
         raise HTTPException(status_code=409, detail="Username already exists")
     try:
-        return db.add_admin(body.username, hash_password(body.password))
+        chosen = "leader" if body.role == "leader" else "admin"
+        return db.add_user(body.username, hash_password(body.password), chosen)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
@@ -952,8 +1173,8 @@ def update_super_password(body: SuperPasswordBody, user: dict = Depends(require_
 def update_staff(user_id: int, body: AdminUpdateBody, _: dict = Depends(require_super)):
     db.init_db()
     target = db.get_user_by_id(user_id)
-    if not target or target.get("role") != "admin":
-        raise HTTPException(status_code=404, detail="Admin not found")
+    if not target or target.get("role") not in {"admin", "leader"}:
+        raise HTTPException(status_code=404, detail="User not found")
     if body.username:
         clash = db.get_user(body.username)
         if clash and clash["id"] != user_id:
@@ -1013,8 +1234,40 @@ def list_passes(_: str = Depends(require_admin)):
     return db.list_employees()
 
 
+def _save_leader_login(work_type: str, username: str, password: str) -> str | None:
+    if db.normalize_work_type(work_type) != "leader":
+        return None
+    username = (username or "").strip()
+    if not username:
+        return "A team leader needs a username."
+    existing = db.get_user(username)
+    if existing is None:
+        if not (password or "").strip():
+            return "A team leader needs a password."
+        db.add_user(username, hash_password(password), "leader")
+        return None
+    if existing.get("role") != "leader":
+        return "That username is already used."
+    if (password or "").strip():
+        db.update_admin(int(existing["id"]), password_hash=hash_password(password))
+    return None
+
+
+def _sync_salary(employee_id: str, monthly_salary, actor: str) -> None:
+    if monthly_salary is None:
+        return
+    text = str(monthly_salary).strip()
+    if text == "":
+        return
+    payroll.save_profile(
+        employee_id,
+        {"monthly_salary": text, "effective_date": date.today().isoformat()},
+        actor,
+    )
+
+
 @app.post("/api/v1/passes/enroll")
-def enroll_pass(body: EnrollBody, _: str = Depends(require_admin)):
+def enroll_pass(body: EnrollBody, user: dict = Depends(require_admin)):
     db.init_db()
     eid = body.employee_id.strip()
     if db.employee_id_exists(eid):
@@ -1034,6 +1287,11 @@ def enroll_pass(body: EnrollBody, _: str = Depends(require_admin)):
         emergency_name=body.emergency_name,
         emergency_phone=body.emergency_phone,
     )
+    db.set_employee_profile(eid, job_title=body.job_title or "", work_type=body.work_type or "full")
+    leader_err = _save_leader_login(body.work_type, body.leader_username, body.leader_password)
+    if leader_err:
+        raise HTTPException(status_code=400, detail=leader_err)
+    _sync_salary(eid, body.monthly_salary, _payroll_actor(user))
     created = next((p for p in db.list_employees() if p["employee_id"] == eid), None)
     if not created:
         raise HTTPException(status_code=500, detail="Enrollment failed")
@@ -1057,7 +1315,7 @@ def _embeddings_from_images(images_b64: list[str]) -> list:
 
 
 @app.patch("/api/v1/passes/{employee_id}")
-def update_pass(employee_id: str, body: EmployeeUpdate, _: str = Depends(require_admin)):
+def update_pass(employee_id: str, body: EmployeeUpdate, user: dict = Depends(require_admin)):
     db.init_db()
     new_id = body.new_employee_id.strip()
     if db.employee_id_exists(new_id, exclude_id=employee_id):
@@ -1076,9 +1334,15 @@ def update_pass(employee_id: str, body: EmployeeUpdate, _: str = Depends(require
         phone=body.phone,
         emergency_name=body.emergency_name,
         emergency_phone=body.emergency_phone,
+        job_title=body.job_title,
+        work_type=body.work_type,
     )
     if not updated:
         raise HTTPException(status_code=404, detail="Employee not found")
+    leader_err = _save_leader_login(body.work_type or "", body.leader_username, body.leader_password)
+    if leader_err:
+        raise HTTPException(status_code=400, detail=leader_err)
+    _sync_salary(new_id, body.monthly_salary, _payroll_actor(user))
     return updated
 
 
@@ -1169,19 +1433,26 @@ def clock_out(body: CaptureBody):
     }
 
 
+def _report_file_tag(employee_id: str) -> str:
+    raw = re.sub(r"[^A-Za-z0-9._-]+", "-", (employee_id or "").strip())[:40]
+    return f"-{raw}" if raw else ""
+
+
 @app.get("/api/v1/reports")
 def get_reports(
     work_date: str = Query(default=""),
     period: str = Query(default="daily"),
+    employee_id: str = Query(default=""),
     _: str = Depends(require_admin),
 ):
-    rows, start, end, kind = reports.report_rows(period, work_date)
+    rows, start, end, kind = reports.report_rows(period, work_date, employee_id)
     return {
         "period": kind,
         "date_from": start,
         "date_to": end,
+        "employee_id": employee_id,
         "rows": rows,
-        "summary": reports.summarize(rows),
+        "summary": reports.summarize(rows, start, end, employee_id),
     }
 
 
@@ -1189,14 +1460,16 @@ def get_reports(
 def export_excel(
     work_date: str = Query(default=""),
     period: str = Query(default="daily"),
+    employee_id: str = Query(default=""),
     _: str = Depends(require_admin),
 ):
     start, end, kind = reports.resolve_period(period, work_date)
-    data = reports.build_excel(period, work_date)
+    data = reports.build_excel(period, work_date, employee_id)
+    tag = _report_file_tag(employee_id)
     return Response(
         content=data,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="AbsenceLess-{kind}-{start}-to-{end}.xlsx"'},
+        headers={"Content-Disposition": f'attachment; filename="BunkerAttendance-{kind}{tag}-{start}-to-{end}.xlsx"'},
     )
 
 
@@ -1204,14 +1477,16 @@ def export_excel(
 def export_pdf(
     work_date: str = Query(default=""),
     period: str = Query(default="daily"),
+    employee_id: str = Query(default=""),
     _: str = Depends(require_admin),
 ):
     start, end, kind = reports.resolve_period(period, work_date)
-    data = reports.build_pdf(period, work_date)
+    data = reports.build_pdf(period, work_date, employee_id)
+    tag = _report_file_tag(employee_id)
     return Response(
         content=data,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="AbsenceLess-{kind}-{start}-to-{end}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="BunkerAttendance-{kind}{tag}-{start}-to-{end}.pdf"'},
     )
 
 
@@ -1464,6 +1739,72 @@ def console_attendance(
     return console.attendance_rows(work_date, name)
 
 
+@app.get("/api/v1/attendance/roster")
+def attendance_roster(work_date: str = Query(default=""), _: dict = Depends(require_admin)):
+    db.init_db()
+    day = (work_date or "").strip() or date.today().isoformat()
+    people = [
+        p
+        for p in db.list_employees()
+        if (p.get("employment_status") or "active").lower() != "inactive"
+    ]
+    return [
+        {
+            "employee_id": p["employee_id"],
+            "name": p.get("name") or p["employee_id"],
+            "days_off_left": payroll.days_off_left(p["employee_id"], day),
+            "days_off_allowance": payroll.DAYS_OFF_ALLOWANCE,
+        }
+        for p in people
+    ]
+
+
+@app.post("/api/v1/attendance/absent")
+def mark_absent(body: AbsentBody, user: dict = Depends(require_admin)):
+    db.init_db()
+    day = (body.work_date or "").strip() or date.today().isoformat()
+    try:
+        return payroll.mark_unpermitted_absence(body.employee_id, day, user.get("username") or "admin")
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/v1/attendance/absent")
+def clear_absent(
+    employee_id: str = Query(...),
+    work_date: str = Query(...),
+    _: dict = Depends(require_admin),
+):
+    db.init_db()
+    try:
+        return payroll.clear_unpermitted_absence(employee_id, work_date)
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/attendance/day-off")
+def mark_day_off(body: AbsentBody, user: dict = Depends(require_admin)):
+    db.init_db()
+    day = (body.work_date or "").strip() or date.today().isoformat()
+    try:
+        return payroll.mark_day_off(body.employee_id, day, user.get("username") or "admin")
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/v1/attendance/day-off")
+def clear_day_off(
+    employee_id: str = Query(...),
+    work_date: str = Query(...),
+    _: dict = Depends(require_admin),
+):
+    db.init_db()
+    try:
+        return payroll.clear_day_off(employee_id, work_date)
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/v1/console/attendance/{session_id}/correct")
 def console_correct(
     session_id: int,
@@ -1671,6 +2012,149 @@ def console_preview_action(module: str, _: dict = Depends(require_admin)):
             "module": module,
             "detail": console.PREVIEW_NOTE,
         },
+    )
+
+
+def _payroll_actor(user) -> str:
+    if isinstance(user, dict):
+        return str(user.get("username") or "admin")
+    return str(user or "admin")
+
+
+def _payroll_role(user) -> str:
+    if isinstance(user, dict):
+        return str(user.get("role") or "admin")
+    return "admin"
+
+
+@app.get("/api/v1/payroll/settings")
+def payroll_get_settings(_: dict = Depends(require_admin)):
+    db.init_db()
+    return payroll.get_policy()
+
+
+@app.put("/api/v1/payroll/settings")
+def payroll_put_settings(body: PayrollSettingsBody, user: dict = Depends(require_admin)):
+    db.init_db()
+    try:
+        return payroll.save_policy(body.model_dump(exclude_none=True), _payroll_actor(user))
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/payroll/profiles/{employee_id}")
+def payroll_get_profile(employee_id: str, _: dict = Depends(require_admin)):
+    db.init_db()
+    try:
+        return payroll.get_profile(employee_id)
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.put("/api/v1/payroll/profiles/{employee_id}")
+def payroll_put_profile(employee_id: str, body: PayrollProfileBody, user: dict = Depends(require_admin)):
+    db.init_db()
+    try:
+        return payroll.save_profile(employee_id, body.model_dump(exclude_none=True), _payroll_actor(user))
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/payroll/leave")
+def payroll_add_leave(body: PayrollLeaveBody, user: dict = Depends(require_admin)):
+    db.init_db()
+    try:
+        return payroll.add_leave(body.employee_id, body.work_date, body.kind, _payroll_actor(user), body.note, body.days)
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/payroll/adjustments")
+def payroll_add_adjustment(body: PayrollAdjustmentBody, user: dict = Depends(require_admin)):
+    db.init_db()
+    try:
+        return payroll.add_adjustment(body.employee_id, body.amount, body.kind, _payroll_actor(user), body.note, body.period_id)
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/payroll/preview")
+def payroll_preview(
+    start_date: str = Query(...),
+    end_date: str = Query(...),
+    employee_id: str = Query(default=""),
+    _: dict = Depends(require_admin),
+):
+    db.init_db()
+    try:
+        return payroll.preview(start_date, end_date, employee_id)
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/payroll/calculate")
+def payroll_calculate(body: PayrollRangeBody, user: dict = Depends(require_admin)):
+    db.init_db()
+    try:
+        return payroll.calculate_period(body.start_date, body.end_date, _payroll_actor(user))
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/payroll/periods")
+def payroll_list_periods(_: dict = Depends(require_admin)):
+    db.init_db()
+    return {"periods": payroll.list_periods()}
+
+
+@app.get("/api/v1/payroll/periods/{period_id}")
+def payroll_get_period(period_id: int, _: dict = Depends(require_admin)):
+    db.init_db()
+    try:
+        return payroll.get_period(period_id)
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/payroll/periods/{period_id}/status")
+def payroll_set_status(period_id: int, body: PayrollStatusBody, user: dict = Depends(require_admin)):
+    db.init_db()
+    try:
+        return payroll.set_status(period_id, body.status, _payroll_actor(user), _payroll_role(user))
+    except payroll.PayrollError as exc:
+        code = 403 if "owner" in str(exc).lower() or "finalize" in str(exc).lower() and "only" in str(exc).lower() else 400
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/payroll/periods/{period_id}/employees/{employee_id}")
+def payroll_employee_detail(period_id: int, employee_id: str, _: dict = Depends(require_admin)):
+    db.init_db()
+    try:
+        return payroll.employee_detail(period_id, employee_id)
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/payroll/periods/{period_id}/payslip/{employee_id}")
+def payroll_payslip(period_id: int, employee_id: str, _: dict = Depends(require_admin)):
+    db.init_db()
+    try:
+        return payroll.payslip(period_id, employee_id)
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/payroll/periods/{period_id}/export")
+def payroll_export(period_id: int, format: str = Query(default="xlsx"), _: dict = Depends(require_admin)):
+    db.init_db()
+    try:
+        payload, name, media = payroll.export_period(period_id, format)
+    except payroll.PayrollError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return Response(
+        content=payload,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
     )
 
 

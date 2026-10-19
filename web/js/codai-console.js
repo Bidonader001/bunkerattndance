@@ -12,6 +12,7 @@
     integrations: "API & Integrations",
     notifications: "Notifications",
     settings: "Settings",
+    payroll: "Payroll",
   };
   var peopleCache = [];
   var peoplePage = 0;
@@ -57,7 +58,7 @@
 
   function applyUser(me) {
     var name = (me && me.username) || "Admin";
-    var role = (me && me.role) === "super" ? "Company owner" : "HR administrator";
+    var role = (me && me.role) === "leader" ? "Team leader" : "Admin";
     var initial = name.charAt(0).toUpperCase();
     ["sidebar-username", "top-username"].forEach(function (id) {
       setText(id, name);
@@ -133,9 +134,80 @@
       });
   }
 
+  function statTone(key) {
+    if (key === "present" || key === "working" || key === "employees") return "ok";
+    if (key === "late") return "late";
+    if (key === "absent" || key === "missing") return "critical";
+    return "";
+  }
+
+  function setDashLink(state, detail) {
+    var pill = el("dash-link");
+    if (pill) {
+      pill.className = "live-pill " + (state || "");
+      pill.textContent = state === "live" ? "Live" : state === "offline" ? "Offline" : "Connecting";
+    }
+    var meta = el("dash-refresh");
+    if (meta && detail) meta.textContent = detail;
+  }
+
+  function renderStaff(data) {
+    var note = el("dash-month-note");
+    var allowance = data.days_off_allowance || 4;
+    if (note) {
+      note.textContent =
+        "Through " +
+        (data.staff_through || "today") +
+        ". Each employee has " +
+        allowance +
+        " days off. No clock-in is 1 day, absent is 2 days, and a day off is free until those " +
+        allowance +
+        " are used.";
+    }
+    var body = el("dash-staff-body");
+    if (!body) return;
+    var rows = data.staff || [];
+    var cur = data.currency || "EGP";
+    body.innerHTML = rows.length
+      ? rows
+          .map(function (r) {
+            return (
+              "<tr><td>" +
+              esc(r.name) +
+              '<br><span class="muted">' +
+              esc(r.employee_id) +
+              "</span></td><td class=\"num\">" +
+              esc(money(r.salary, cur)) +
+              "</td><td class=\"num\">" +
+              esc(r.days_off_left) +
+              " of " +
+              esc(r.days_off_allowance || allowance) +
+              "</td><td class=\"num\">" +
+              esc(r.late_days) +
+              "</td><td class=\"num\">" +
+              esc(r.absent) +
+              "</td><td class=\"num\">" +
+              esc(r.no_clock_in) +
+              "</td><td class=\"num\">" +
+              esc(r.no_clock_out) +
+              "</td><td class=\"num\">" +
+              esc(r.extra_days || 0) +
+              "</td><td class=\"num\">" +
+              esc(money(r.deducted, cur)) +
+              "</td><td class=\"num\">" +
+              esc(money(r.to_pay, cur)) +
+              "</td><td>" +
+              todayChoice(r) +
+              "</td></tr>"
+            );
+          })
+          .join("")
+      : '<tr><td colspan="11" class="muted">No active employees.</td></tr>';
+  }
+
   function renderOverview(data) {
     if (!data) return;
-    setText("sidebar-company", data.company || "Absence Less");
+    setText("sidebar-company", data.company || "Bunker Attendance");
     setText("sidebar-branch", data.branch || "Headquarters");
     var hour = new Date().getHours();
     var hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -146,8 +218,11 @@
       cards.innerHTML = data.stats
         .map(function (s) {
           var src = s.source === "preview" ? " · preview" : "";
+          var tone = statTone(s.key);
           return (
-            '<a class="stat-card" href="' +
+            '<a class="stat-card' +
+            (tone ? " tone-" + tone : "") +
+            '" href="' +
             esc(s.href || "#") +
             '"><p class="eyebrow">' +
             esc(s.label) +
@@ -158,6 +233,23 @@
           );
         })
         .join("");
+    }
+    renderStaff(data);
+    var alertBox = el("dash-alert");
+    if (alertBox) {
+      var byKey = {};
+      (data.stats || []).forEach(function (s) { byKey[s.key] = Number(s.value) || 0; });
+      var parts = [];
+      if (byKey.absent) parts.push(byKey.absent + " absent");
+      if (byKey.missing) parts.push(byKey.missing + " missing check-out");
+      if (byKey.late) parts.push(byKey.late + " late");
+      if (parts.length) {
+        alertBox.classList.remove("hidden");
+        alertBox.textContent = "Needs attention: " + parts.join(" · ");
+      } else {
+        alertBox.classList.add("hidden");
+        alertBox.textContent = "";
+      }
     }
     var week = data.week || [];
     var weekEl = el("dash-week");
@@ -196,7 +288,9 @@
             esc(d.value) +
             " · " +
             pct +
-            '%</strong></div><div class="donut-bar"><span style="width:' +
+            '%</strong></div><div class="donut-bar tone-' +
+            esc(d.tone || "") +
+            '"><span style="width:' +
             pct +
             '%"></span></div>'
           );
@@ -207,12 +301,31 @@
     if (act) {
       renderTable(
         act,
-        ["Employee", "ID", "Event", "Time", "Branch", "Device", "Status"],
+        ["Employee", "ID", "Event", "Time", "Status"],
         (data.activity || []).map(function (r) {
-          return [esc(r.name), esc(r.employee_id), esc(r.event), esc(r.time), esc(r.branch), esc(r.device), esc(r.status)];
+          return [esc(r.name), esc(r.employee_id), esc(r.event), esc(r.time), esc(r.status)];
         }),
         "No attendance events today."
       );
+    }
+    var onsite = el("dash-onsite");
+    if (onsite) {
+      var rows = data.onsite || [];
+      onsite.innerHTML = rows.length
+        ? rows
+            .map(function (s) {
+              return (
+                '<article class="log-row"><header><span>' +
+                esc(s.employee_name) +
+                '</span><span class="granted-tag">' +
+                esc(s.shift_name || "On site") +
+                "</span></header><p class=\"muted\">In since " +
+                esc(String(s.clock_in || "").slice(11, 16) || "—") +
+                "</p></article>"
+              );
+            })
+            .join("")
+        : '<p class="muted">Nobody is clocked in right now.</p>';
     }
     var br = el("dash-branches");
     if (br) {
@@ -280,13 +393,31 @@
     }
   }
 
+  var dashTimer = null;
+
   function loadOverview() {
     return api("/console/overview")
-      .then(renderOverview)
+      .then(function (data) {
+        renderOverview(data);
+        var stamp = new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        setDashLink("live", "Auto-refresh 15s · updated " + stamp);
+      })
       .catch(function (err) {
         var cards = el("dash-cards");
+        setDashLink("offline", "Offline · last view kept · " + (err.message || "retrying"));
         if (cards && !cards.children.length) cards.innerHTML = '<p class="status">' + esc(err.message) + "</p>";
       });
+  }
+
+  function startDashWatch() {
+    loadOverview();
+    if (dashTimer) clearInterval(dashTimer);
+    dashTimer = setInterval(loadOverview, 15000);
+  }
+
+  function stopDashWatch() {
+    if (dashTimer) clearInterval(dashTimer);
+    dashTimer = null;
   }
 
   function filteredPeople() {
@@ -297,7 +428,7 @@
     var face = (el("people-face") && el("people-face").value) || "";
     var status = (el("people-status-filter") && el("people-status-filter").value) || "";
     return peopleCache.filter(function (p) {
-      var hay = ((p.name || "") + " " + (p.employee_id || "") + " " + (p.email || "")).toLowerCase();
+      var hay = ((p.name || "") + " " + (p.employee_id || "") + " " + (p.phone || "") + " " + (p.job_title || "")).toLowerCase();
       if (q && hay.indexOf(q) === -1) return false;
       if (branch && (p.branch || "HQ") !== branch) return false;
       if (dept && (p.department || "") !== dept) return false;
@@ -309,7 +440,7 @@
     });
   }
 
-  function fillSelect(id, values, keep) {
+  function fillFilter(id, values, keep) {
     var sel = el(id);
     if (!sel) return;
     var current = sel.value;
@@ -330,24 +461,29 @@
     if (peoplePage >= pages) peoplePage = pages - 1;
     var slice = rows.slice(peoplePage * PAGE_SIZE, peoplePage * PAGE_SIZE + PAGE_SIZE);
     if (!slice.length) {
-      body.innerHTML = '<tr><td colspan="8" class="muted">No employees match these filters.</td></tr>';
+      body.innerHTML = '<tr><td colspan="9" class="muted">No employees match these filters.</td></tr>';
     } else {
       body.innerHTML = slice
         .map(function (p) {
           var face = p.has_face ? "Enrolled" : "Not enrolled";
+          var salary = p.monthly_salary ? String(p.monthly_salary) : "—";
+          var eid = esc(p.employee_id);
           return (
             "<tr>" +
-            "<td>" + esc(p.employee_id) + "</td>" +
+            "<td>" + eid + "</td>" +
             "<td>" + esc(p.name) + "</td>" +
-            "<td>" + esc(p.department || "—") + "</td>" +
-            "<td>" + esc(p.branch || "HQ") + "</td>" +
-            "<td>" + esc(p.shift_name || "Auto") + "</td>" +
+            "<td>" + esc(p.job_title || "—") + "</td>" +
+            "<td>" + (p.work_type === "part" ? "Part time" : p.work_type === "leader" ? "Team leader" : "Full time") + "</td>" +
+            "<td>" + esc(p.phone || "—") + "</td>" +
+            "<td>" + esc(salary) + "</td>" +
             "<td>" + face + "</td>" +
             "<td>" + esc(p.employment_status || "active") + "</td>" +
             '<td class="people-actions">' +
-            '<button class="ghost small-del" type="button" data-edit-person="' + esc(p.employee_id) + '">Edit</button>' +
+            '<button class="ghost small-del" type="button" data-edit-person="' + eid + '">Edit</button>' +
+            '<button class="ghost small-del" type="button" data-emp-att="' + eid + '">Attendance</button>' +
+            '<button class="ghost small-del" type="button" data-emp-rep="' + eid + '">Report</button>' +
             '<a class="ghost small-del" href="/admin?page=register">Enroll face</a>' +
-            '<button class="ghost small-del danger" type="button" data-deactivate-person="' + esc(p.employee_id) + '">Deactivate</button>' +
+            '<button class="ghost small-del danger" type="button" data-deactivate-person="' + eid + '">Deactivate</button>' +
             "</td></tr>"
           );
         })
@@ -371,9 +507,8 @@
         if (p.branch && branches.indexOf(p.branch) === -1) branches.push(p.branch);
         if (p.department && depts.indexOf(p.department) === -1) depts.push(p.department);
       });
-      fillSelect("people-branch", branches, "All");
-      fillSelect("people-dept", depts, "All");
-      fillSelect("dash-dept", depts, "All departments");
+      fillFilter("people-branch", branches, "All");
+      fillFilter("people-dept", depts, "All");
       api("/shifts")
         .then(function (shifts) {
           var sel = el("people-shift");
@@ -413,53 +548,13 @@
                 "<td>" + esc(r.late) + "</td>" +
                 "<td>" + esc(r.status) + "</td>" +
                 "<td>" + esc(r.device) + "</td>" +
-                '<td><button class="ghost small-del" type="button" data-correct="' +
-                esc(r.id) +
-                '">Correct</button></td></tr>'
-              );
-            })
-            .join("")
-        : '<tr><td colspan="10" class="muted">No attendance records for this filter.</td></tr>';
-    }
-    var audit = el("att-audit-body");
-    if (audit) {
-      var audits = attCache.audits || [];
-      audit.innerHTML = audits.length
-        ? audits
-            .map(function (a) {
-              var actions =
-                a.status === "pending"
-                  ? '<button class="ghost small-del" type="button" data-audit="' +
-                    a.id +
-                    '" data-st="approved">Approve</button>' +
-                    '<button class="ghost small-del danger" type="button" data-audit="' +
-                    a.id +
-                    '" data-st="rejected">Reject</button>'
-                  : "—";
-              return (
-                "<tr><td>" +
-                esc(String(a.created_at || "").replace("T", " ").slice(0, 16)) +
-                "</td><td>" +
-                esc(a.employee_name) +
-                "</td><td>" +
-                esc(a.field) +
-                "</td><td>" +
-                esc(a.old_value) +
-                "</td><td>" +
-                esc(a.new_value) +
-                "</td><td>" +
-                esc(a.reason) +
-                "</td><td>" +
-                esc(a.actor) +
-                "</td><td>" +
-                esc(a.status) +
-                "</td><td class=\"people-actions\">" +
-                actions +
+                "<td>" +
+                decisionCell(r) +
                 "</td></tr>"
               );
             })
             .join("")
-        : '<tr><td colspan="9" class="muted">No correction requests.</td></tr>';
+        : '<tr><td colspan="10" class="muted">No attendance records for this filter.</td></tr>';
     }
   }
 
@@ -473,6 +568,92 @@
         var body = el("att-body");
         if (body) body.innerHTML = '<tr><td colspan="10" class="status">' + esc(err.message) + "</td></tr>";
       });
+  }
+
+  var decisionKind = "absent";
+
+  function todayChoice(r) {
+    var actions = decisionCell({ status: r.today, employee_id: r.employee_id, date: r.today_date });
+    return esc(r.today || "") + (actions ? "<br>" + actions : "");
+  }
+
+  function applyDecisionClick(e, afterward) {
+    var markA = e.target.closest && e.target.closest("[data-mark-absent]");
+    var markD = e.target.closest && e.target.closest("[data-mark-dayoff]");
+    var clearA = e.target.closest && e.target.closest("[data-clear-absent]");
+    var clearD = e.target.closest && e.target.closest("[data-clear-dayoff]");
+    var btn = markA || markD || clearA || clearD;
+    if (!btn) return;
+    var employeeId = btn.getAttribute("data-mark-absent") || btn.getAttribute("data-mark-dayoff") || btn.getAttribute("data-clear-absent") || btn.getAttribute("data-clear-dayoff") || "";
+    var day = btn.getAttribute("data-absent-date") || "";
+    var done = markA || markD
+      ? postDecision(markD ? "day_off" : "absent", employeeId, day)
+      : api(
+          (clearD ? "/attendance/day-off" : "/attendance/absent") +
+            "?employee_id=" +
+            encodeURIComponent(employeeId) +
+            "&work_date=" +
+            encodeURIComponent(day),
+          { method: "DELETE" }
+        );
+    done
+      .then(function () {
+        toast(markD ? "Day off saved." : markA ? "Absence saved." : clearD ? "Day off cleared." : "Absence cleared.");
+        afterward();
+      })
+      .catch(function (err) { toast(err.message || "Could not update the day.", true); });
+  }
+
+  function decisionCell(r) {
+    var id = esc(r.employee_id);
+    var day = esc(r.date);
+    if (r.status === "Absent") {
+      return '<button type="button" class="ghost small-del" data-clear-absent="' + id + '" data-absent-date="' + day + '">Clear</button>';
+    }
+    if (r.status === "Day off") {
+      return '<button type="button" class="ghost small-del" data-clear-dayoff="' + id + '" data-absent-date="' + day + '">Clear</button>';
+    }
+    if (r.status === "No clock-in") {
+      return (
+        '<button type="button" class="ghost small-del" data-mark-absent="' +
+        id +
+        '" data-absent-date="' +
+        day +
+        '">Absent</button> <button type="button" class="ghost small-del" data-mark-dayoff="' +
+        id +
+        '" data-absent-date="' +
+        day +
+        '">Day off</button>'
+      );
+    }
+    return "";
+  }
+
+  function postDecision(kind, employeeId, day) {
+    var path = kind === "day_off" ? "/attendance/day-off" : "/attendance/absent";
+    return api(path, {
+      method: "POST",
+      body: JSON.stringify({ employee_id: employeeId, work_date: day }),
+    });
+  }
+
+  function fillAbsentRoster() {
+    var day = (el("absent-date") && el("absent-date").value) || (el("att-date") && el("att-date").value) || "";
+    var path = "/attendance/roster" + (day ? "?work_date=" + encodeURIComponent(day) : "");
+    return api(path).then(function (rows) {
+      var sel = el("absent-employee");
+      if (!sel) return;
+      var current = sel.value;
+      sel.innerHTML =
+        '<option value="">Choose an employee</option>' +
+        (rows || [])
+          .map(function (p) {
+            var left = p.days_off_left == null ? "" : " · " + p.days_off_left + " of " + (p.days_off_allowance || 4) + " days off left";
+            return '<option value="' + esc(p.employee_id) + '">' + esc(p.name) + " · " + esc(p.employee_id) + esc(left) + "</option>";
+          })
+          .join("");
+      if (current) sel.value = current;
+    });
   }
 
   function loadNotifications() {
@@ -521,13 +702,9 @@
         if (el("set-tz")) el("set-tz").value = v.timezone || "";
         if (el("set-days")) el("set-days").value = v.working_days || "";
         if (el("set-contact")) el("set-contact").value = v.contact || "";
-        if (el("set-grace")) el("set-grace").value = v.grace_minutes || "";
-        if (el("set-dup")) el("set-dup").value = v.duplicate_scan_seconds || "";
-        if (el("set-ot")) el("set-ot").value = v.overtime_policy || "";
-        if (el("set-face")) el("set-face").checked = !!v.face_premium;
         if (typeof syncNightControls === "function") syncNightControls();
-        setText("sidebar-company", v.company_name || "Absence Less");
-        return previewPanel("settings-preview", "recognition");
+        setText("sidebar-company", v.company_name || "Bunker Attendance");
+        loadPayrollSettings();
       })
       .catch(function (err) {
         var st = el("settings-status");
@@ -761,10 +938,11 @@
   }
 
   window.codaiOnPage = function (key) {
-    setText("top-crumbs", "Absence Less / " + (TITLES[key] || key));
+    setText("top-crumbs", "Bunker Attendance Manager / " + (TITLES[key] || key));
     setNavOpen(false);
     if (key !== "devices") stopDeviceCam();
-    if (key === "dashboard") loadOverview();
+    if (key === "dashboard") startDashWatch();
+    else stopDashWatch();
     if (key === "people") loadPeopleConsole();
     if (key === "attendance") loadAttendance();
     if (key === "shifts") loadShiftsCalendar();
@@ -773,6 +951,7 @@
     if (key === "integrations") previewPanel("integrations-panel", "integrations");
     if (key === "notifications") loadNotifications();
     if (key === "settings") loadSettings();
+    if (key === "payroll") loadPayrollPage();
     if (key === "reports") loadNotifications();
   };
 
@@ -808,7 +987,7 @@
     helpBtn.addEventListener("click", function () { helpDlg.showModal(); });
   } else if (helpBtn) {
     helpBtn.addEventListener("click", function () {
-      toast("Enroll faces here. Employees clock in on /kiosk. Corrections never replace the original scan.");
+      toast("Enroll faces here. Employees clock in on /kiosk.");
     });
   }
   var notifyBtn = el("btn-notify");
@@ -863,11 +1042,15 @@
           toast("Not saved — preview only.", true);
         });
     }
-    var correctBtn = e.target.closest && e.target.closest("[data-correct]");
-    if (correctBtn) {
-      var dlg = el("correct-dialog");
-      el("correct-id").value = correctBtn.getAttribute("data-correct");
-      if (dlg && dlg.showModal) dlg.showModal();
+    var empAtt = e.target.closest && e.target.closest("[data-emp-att]");
+    if (empAtt) {
+      openExportDialog("monthly", empAtt.getAttribute("data-emp-att"));
+      return;
+    }
+    var empRep = e.target.closest && e.target.closest("[data-emp-rep]");
+    if (empRep) {
+      downloadEmployeeReport(empRep.getAttribute("data-emp-rep"));
+      return;
     }
     var deact = e.target.closest && e.target.closest("[data-deactivate-person]");
     if (deact) {
@@ -943,18 +1126,6 @@
         .catch(function (err) { toast(err.message, true); });
       return;
     }
-    var auditBtn = e.target.closest && e.target.closest("[data-audit]");
-    if (auditBtn) {
-      api("/console/attendance/audit/" + auditBtn.getAttribute("data-audit"), {
-        method: "PATCH",
-        body: JSON.stringify({ status: auditBtn.getAttribute("data-st") }),
-      })
-        .then(function () {
-          toast("Correction " + auditBtn.getAttribute("data-st") + ". Original clock times unchanged.");
-          loadAttendance();
-        })
-        .catch(function (err) { toast(err.message, true); });
-    }
     var reportBtn = e.target.closest && e.target.closest("[data-report]");
     if (reportBtn && el("report-period")) {
       var kind = reportBtn.getAttribute("data-report");
@@ -967,6 +1138,18 @@
   if (attLoad) attLoad.addEventListener("click", loadAttendance);
   var attStatus = el("att-status");
   if (attStatus) attStatus.addEventListener("change", function () { renderAttendance(attCache); });
+  var staffBody = el("dash-staff-body");
+  if (staffBody) {
+    staffBody.addEventListener("click", function (e) {
+      applyDecisionClick(e, function () { loadOverview(); });
+    });
+  }
+  var attBody = el("att-body");
+  if (attBody) {
+    attBody.addEventListener("click", function (e) {
+      applyDecisionClick(e, function () { loadAttendance(); });
+    });
+  }
 
   var exportMeta = null;
   var exportBusy = false;
@@ -1148,7 +1331,40 @@
     renderExportCols();
   }
 
-  function openExportDialog(kind) {
+  function downloadEmployeeReport(employeeId) {
+    var token = typeof getAuthToken === "function" ? getAuthToken() : "";
+    var headers = {};
+    if (token) headers.Authorization = "Bearer " + token;
+    var day = isoLocal(new Date());
+    var qs =
+      "period=monthly&work_date=" +
+      encodeURIComponent(day) +
+      "&employee_id=" +
+      encodeURIComponent(employeeId || "");
+    fetch(API + "/reports/excel?" + qs, { credentials: "include", headers: headers })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.statusText || "Report download failed.");
+        var disp = res.headers.get("Content-Disposition") || "";
+        var match = /filename=\"?([^\";]+)\"?/.exec(disp);
+        var name = match ? match[1] : "BunkerAttendance-employee-report.xlsx";
+        return res.blob().then(function (blob) {
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement("a");
+          a.href = url;
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          toast("Employee report download started.");
+        });
+      })
+      .catch(function (err) {
+        toast(err.message || "Report download failed.", true);
+      });
+  }
+
+  function openExportDialog(kind, employeeId) {
     var dlg = el("export-dialog");
     if (!dlg) {
       toast("Export dialog is missing.", true);
@@ -1167,6 +1383,7 @@
     ready
       .then(function () {
         applyExportDefaults(kind);
+        if (employeeId && el("export-employee")) el("export-employee").value = employeeId;
         scheduleExportCount();
         if (dlg.showModal) dlg.showModal();
         else dlg.setAttribute("open", "open");
@@ -1214,7 +1431,7 @@
         }
         var disp = res.headers.get("Content-Disposition") || "";
         var match = /filename=\"?([^\";]+)\"?/.exec(disp);
-        var name = match ? match[1] : "AbsenceLess_export";
+        var name = match ? match[1] : "BunkerAttendance_export";
         return res.blob().then(function (blob) {
           var url = URL.createObjectURL(blob);
           var a = document.createElement("a");
@@ -1325,48 +1542,6 @@
     });
   }
 
-  var correctForm = el("correct-form");
-  if (correctForm) {
-    correctForm.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var id = el("correct-id").value;
-      api("/console/attendance/" + id + "/correct", {
-        method: "POST",
-        body: JSON.stringify({
-          field: el("correct-field").value,
-          new_value: el("correct-value").value,
-          reason: el("correct-reason").value,
-        }),
-      })
-        .then(function () {
-          toast("Correction stored. Original event kept.");
-          var dlg = el("correct-dialog");
-          if (dlg && dlg.close) dlg.close();
-          loadAttendance();
-        })
-        .catch(function (err) { toast(err.message, true); });
-    });
-  }
-  var cancelCorrect = el("correct-cancel");
-  if (cancelCorrect) {
-    cancelCorrect.addEventListener("click", function () {
-      var dlg = el("correct-dialog");
-      if (dlg && dlg.close) dlg.close();
-    });
-  }
-
-  var dashRange = el("dash-range");
-  if (dashRange) {
-    dashRange.addEventListener("change", function () {
-      var custom = dashRange.value === "custom";
-      el("dash-custom-wrap").classList.toggle("hidden", !custom);
-      el("dash-custom-to-wrap").classList.toggle("hidden", !custom);
-      if (dashRange.value === "week" || dashRange.value === "month") {
-        if (typeof showPage === "function") showPage("reports");
-      }
-    });
-  }
-
   var settingsForm = el("settings-form");
   if (settingsForm) {
     settingsForm.addEventListener("submit", function (e) {
@@ -1378,10 +1553,6 @@
           timezone: el("set-tz").value,
           working_days: el("set-days").value,
           contact: el("set-contact").value,
-          grace_minutes: el("set-grace").value,
-          duplicate_scan_seconds: el("set-dup").value,
-          overtime_policy: el("set-ot").value,
-          face_premium: !!(el("set-face") && el("set-face").checked),
         }),
       })
         .then(function () {
@@ -1461,5 +1632,331 @@
   api("/auth/me")
     .then(applyUser)
     .catch(function () {});
+
+  var payRun = null;
+  var payCurrency = "EGP";
+
+  function monthBounds() {
+    var now = new Date();
+    var start = new Date(now.getFullYear(), now.getMonth(), 1);
+    var end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    function iso(d) {
+      var mm = String(d.getMonth() + 1);
+      var dd = String(d.getDate());
+      if (mm.length < 2) mm = "0" + mm;
+      if (dd.length < 2) dd = "0" + dd;
+      return d.getFullYear() + "-" + mm + "-" + dd;
+    }
+    return { start: iso(start), end: iso(end) };
+  }
+
+  function money(v, cur) {
+    var n = Number(v);
+    var c = cur || payCurrency || "EGP";
+    if (!isFinite(n)) return String(v == null ? "0" : v) + " " + c;
+    return n.toFixed(2) + " " + c;
+  }
+
+  function setVal(id, value) {
+    var node = el(id);
+    if (node) node.value = value == null ? "" : String(value);
+  }
+
+  function loadPayrollSettings() {
+    return api("/payroll/settings")
+      .then(function (data) {
+        var v = (data && data.values) || {};
+        payCurrency = v.currency || "EGP";
+        setVal("pay-currency", v.currency);
+        setVal("pay-divisor", v.divisor);
+        setVal("pay-hours", v.hours_per_day);
+        setVal("pay-round", v.rounding);
+        setVal("pay-prec", v.rounding_precision);
+        setVal("pay-effective", v.effective_date);
+        setVal("pay-leave", v.paid_leave_days);
+        setVal("pay-unused", v.unused_leave_compensation);
+        setVal("pay-payout", v.unused_payout);
+        setVal("pay-carry", v.leave_carry_forward);
+        setVal("pay-carry-max", v.max_carry_forward);
+        setVal("pay-holidays", v.public_holidays);
+      })
+      .catch(function (err) {
+        setText("payroll-settings-status", err.message || "Could not load payroll rules.");
+      });
+  }
+
+  function renderPayroll(data) {
+    payRun = data;
+    payCurrency = (data && data.currency) || payCurrency;
+    var cards = el("pay-cards");
+    if (cards) {
+      cards.innerHTML =
+        '<article class="stat-card"><span>Total payroll</span><strong>' + esc(money(data.total_payroll)) + "</strong></article>" +
+        '<article class="stat-card"><span>Employees</span><strong>' + esc(String(data.employee_count || 0)) + "</strong></article>" +
+        '<article class="stat-card"><span>Additions</span><strong>' + esc(money(data.total_additions)) + "</strong></article>" +
+        '<article class="stat-card"><span>Deductions</span><strong>' + esc(money(data.total_deductions)) + "</strong></article>" +
+        '<article class="stat-card"><span>Needs review</span><strong>' + esc(String(data.outstanding_review || 0)) + "</strong></article>" +
+        '<article class="stat-card"><span>Status</span><strong>' + esc(data.status || "preview") + "</strong></article>";
+    }
+    setText("pay-status", (data.status || "preview") + (data.period_id ? " · run #" + data.period_id : ""));
+    var q = ((el("pay-search") && el("pay-search").value) || "").toLowerCase();
+    var rows = (data.employees || []).filter(function (r) {
+      if (!q) return true;
+      return String(r.name || "").toLowerCase().indexOf(q) !== -1 || String(r.employee_id || "").toLowerCase().indexOf(q) !== -1;
+    });
+    var table = el("pay-table");
+    if (!table) return;
+    if (!rows.length) {
+      table.innerHTML = '<p class="muted">No employees in this period.</p>';
+      return;
+    }
+    var body = rows
+      .map(function (r) {
+        var flag = r.flags && r.flags.length ? ' <span class="badge badge-expired">check records</span>' : "";
+        return (
+          "<tr data-pay-eid=\"" +
+          esc(r.employee_id) +
+          "\"><td>" +
+          esc(r.name) +
+          flag +
+          "</td><td>" +
+          esc(r.employee_id) +
+          "</td><td>" +
+          esc(money(r.base_salary)) +
+          "</td><td>" +
+          esc(r.unused_leave_days) +
+          "</td><td>" +
+          esc(String(r.chargeable_late_minutes || 0)) +
+          "</td><td>" +
+          esc(r.absence_days) +
+          "</td><td>" +
+          esc(money(r.additions_total)) +
+          "</td><td>" +
+          esc(money(r.deductions_total)) +
+          "</td><td>" +
+          esc(money(r.net_pay)) +
+          "</td></tr>"
+        );
+      })
+      .join("");
+    table.innerHTML =
+      '<table class="report-table"><thead><tr><th>Name</th><th>ID</th><th>Base</th><th>Leave bal.</th><th>Late min</th><th>Absence</th><th>Additions</th><th>Deductions</th><th>Net</th></tr></thead><tbody>' +
+      body +
+      "</tbody></table>";
+  }
+
+  function showPayDetail(eid) {
+    if (!payRun || !payRun.employees) return;
+    var row = null;
+    payRun.employees.forEach(function (r) {
+      if (r.employee_id === eid) row = r;
+    });
+    if (!row) return;
+    var empty = el("pay-detail-empty");
+    var box = el("pay-detail");
+    var form = el("pay-profile-form");
+    var leaveForm = el("pay-leave-form");
+    if (empty) empty.classList.add("hidden");
+    if (form) form.classList.remove("hidden");
+    if (leaveForm) leaveForm.classList.remove("hidden");
+    if (box) {
+      box.classList.remove("hidden");
+      var lines = (row.lines || [])
+        .map(function (ln) {
+          return "<li>" + esc(ln.label) + ": " + esc(money(ln.amount)) + "</li>";
+        })
+        .join("");
+      var notes = (row.explanation || []).map(function (n) { return "<li>" + esc(n) + "</li>"; }).join("");
+      var inherit = row.inherited || {};
+      box.innerHTML =
+        "<p><strong>" +
+        esc(row.name) +
+        "</strong> · " +
+        esc(row.employee_id) +
+        "</p><ul>" +
+        lines +
+        "</ul><p class=\"muted\">Inherited: salary " +
+        (inherit.monthly_salary ? "company default" : "override") +
+        ", leave " +
+        (inherit.leave_allowance ? "company default" : "override") +
+        ".</p>" +
+        (notes ? "<p class=\"muted\">Notes</p><ul>" + notes + "</ul>" : "");
+    }
+    setVal("pay-eid", eid);
+    api("/payroll/profiles/" + encodeURIComponent(eid))
+      .then(function (p) {
+        setVal("pay-emp-salary", p.monthly_salary);
+        setVal("pay-emp-leave", p.leave_allowance_override || "");
+        setVal("pay-emp-unused", p.unused_leave_eligible == null ? "inherit" : p.unused_leave_eligible ? "1" : "0");
+        setVal("pay-emp-effective", p.effective_date);
+      })
+      .catch(function () {});
+  }
+
+  function loadPayrollPage() {
+    var bounds = monthBounds();
+    if (el("pay-start") && !el("pay-start").value) el("pay-start").value = bounds.start;
+    if (el("pay-end") && !el("pay-end").value) el("pay-end").value = bounds.end;
+    var start = el("pay-start") && el("pay-start").value;
+    var end = el("pay-end") && el("pay-end").value;
+    if (!start || !end) return;
+    var box = el("pay-table");
+    if (box) box.innerHTML = '<p class="muted">Loading…</p>';
+    api("/payroll/preview?start_date=" + encodeURIComponent(start) + "&end_date=" + encodeURIComponent(end))
+      .then(renderPayroll)
+      .catch(function (err) {
+        if (box) box.innerHTML = '<p class="status">' + esc(err.message) + "</p>";
+        toast(err.message || "Payroll preview failed.", true);
+      });
+  }
+
+  function payrollRange() {
+    return {
+      start_date: (el("pay-start") && el("pay-start").value) || "",
+      end_date: (el("pay-end") && el("pay-end").value) || "",
+    };
+  }
+
+  var paySettingsForm = el("payroll-settings-form");
+  if (paySettingsForm) {
+    paySettingsForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      api("/payroll/settings", {
+        method: "PUT",
+        body: JSON.stringify({
+          currency: el("pay-currency") && el("pay-currency").value,
+          divisor: el("pay-divisor") && el("pay-divisor").value,
+          hours_per_day: el("pay-hours") && el("pay-hours").value,
+          rounding: el("pay-round") && el("pay-round").value,
+          rounding_precision: el("pay-prec") && el("pay-prec").value,
+          effective_date: el("pay-effective") && el("pay-effective").value,
+          paid_leave_days: el("pay-leave") && el("pay-leave").value,
+          unused_leave_compensation: el("pay-unused") && el("pay-unused").value,
+          unused_payout: el("pay-payout") && el("pay-payout").value,
+          leave_carry_forward: el("pay-carry") && el("pay-carry").value,
+          max_carry_forward: el("pay-carry-max") && el("pay-carry-max").value,
+          public_holidays: el("pay-holidays") && el("pay-holidays").value,
+        }),
+      })
+        .then(function () {
+          toast("Payroll rules saved.");
+          setText("payroll-settings-status", "Saved.");
+        })
+        .catch(function (err) {
+          toast(err.message, true);
+          setText("payroll-settings-status", err.message);
+        });
+    });
+  }
+
+  if (el("pay-preview")) {
+    el("pay-preview").addEventListener("click", loadPayrollPage);
+  }
+  if (el("pay-calc")) {
+    el("pay-calc").addEventListener("click", function () {
+      var range = payrollRange();
+      api("/payroll/calculate", { method: "POST", body: JSON.stringify(range) })
+        .then(function (data) {
+          renderPayroll(data);
+          toast("Payroll calculated.");
+        })
+        .catch(function (err) {
+          toast(err.message || "Calculate failed.", true);
+        });
+    });
+  }
+  function postPayStatus(status) {
+    if (!payRun || !payRun.period_id) {
+      toast("Calculate payroll first.", true);
+      return;
+    }
+    api("/payroll/periods/" + payRun.period_id + "/status", { method: "POST", body: JSON.stringify({ status: status }) })
+      .then(function (data) {
+        renderPayroll(data);
+        toast("Payroll is now " + status + ".");
+      })
+      .catch(function (err) {
+        toast(err.message, true);
+      });
+  }
+  if (el("pay-submit")) el("pay-submit").addEventListener("click", function () { postPayStatus("pending_approval"); });
+  if (el("pay-approve")) el("pay-approve").addEventListener("click", function () { postPayStatus("approved"); });
+  if (el("pay-finalize")) el("pay-finalize").addEventListener("click", function () { postPayStatus("finalized"); });
+  function downloadPay(fmt) {
+    if (!payRun || !payRun.period_id) {
+      toast("Calculate payroll first.", true);
+      return;
+    }
+    fetch(API + "/payroll/periods/" + payRun.period_id + "/export?format=" + encodeURIComponent(fmt), { credentials: "include" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("Export failed.");
+        return res.blob().then(function (blob) {
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "payroll." + fmt;
+          a.click();
+        });
+      })
+      .catch(function (err) {
+        toast(err.message, true);
+      });
+  }
+  if (el("pay-csv")) el("pay-csv").addEventListener("click", function () { downloadPay("csv"); });
+  if (el("pay-xlsx")) el("pay-xlsx").addEventListener("click", function () { downloadPay("xlsx"); });
+  if (el("pay-search")) el("pay-search").addEventListener("input", function () { if (payRun) renderPayroll(payRun); });
+  if (el("pay-table")) {
+    el("pay-table").addEventListener("click", function (ev) {
+      var tr = ev.target && ev.target.closest ? ev.target.closest("tr[data-pay-eid]") : null;
+      if (tr) showPayDetail(tr.getAttribute("data-pay-eid"));
+    });
+  }
+  var payProfileForm = el("pay-profile-form");
+  if (payProfileForm) {
+    payProfileForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var eid = el("pay-eid") && el("pay-eid").value;
+      if (!eid) return;
+      var unused = el("pay-emp-unused") && el("pay-emp-unused").value;
+      var body = {
+        monthly_salary: el("pay-emp-salary") && el("pay-emp-salary").value,
+        leave_allowance_override: el("pay-emp-leave") && el("pay-emp-leave").value,
+        effective_date: el("pay-emp-effective") && el("pay-emp-effective").value,
+      };
+      if (unused === "1") body.unused_leave_eligible = true;
+      if (unused === "0") body.unused_leave_eligible = false;
+      api("/payroll/profiles/" + encodeURIComponent(eid), { method: "PUT", body: JSON.stringify(body) })
+        .then(function () {
+          toast("Employee pay profile saved.");
+          loadPayrollPage();
+        })
+        .catch(function (err) {
+          toast(err.message, true);
+        });
+    });
+  }
+  var payLeaveForm = el("pay-leave-form");
+  if (payLeaveForm) {
+    payLeaveForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var eid = el("pay-eid") && el("pay-eid").value;
+      if (!eid) return;
+      api("/payroll/leave", {
+        method: "POST",
+        body: JSON.stringify({
+          employee_id: eid,
+          work_date: el("pay-leave-date") && el("pay-leave-date").value,
+          kind: el("pay-leave-kind") && el("pay-leave-kind").value,
+        }),
+      })
+        .then(function () {
+          toast("Leave recorded.");
+          loadPayrollPage();
+        })
+        .catch(function (err) {
+          toast(err.message, true);
+        });
+    });
+  }
+
   loadOverview();
 })();

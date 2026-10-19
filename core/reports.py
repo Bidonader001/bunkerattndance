@@ -27,7 +27,16 @@ PDF_RED = colors.HexColor("#FFC7C7")
 PDF_GREEN = colors.HexColor("#C6F4D6")
 PDF_PURPLE = colors.HexColor("#E3D0F2")
 HEADERS = ["Name", "ID", "Shift", "Clock in", "Clock out", "Total hours", "Late"]
-AVG_HEADERS = ["Name", "ID", "Days worked", "Sessions", "Total hours", "Avg hours / day"]
+AVG_HEADERS = [
+    "Name",
+    "ID",
+    "Days worked",
+    "Sessions",
+    "Total hours",
+    "Avg hours / day",
+    "Base salary",
+    "Net pay",
+]
 THIN = Border(
     left=Side(style="thin", color="DDDDDD"),
     right=Side(style="thin", color="DDDDDD"),
@@ -52,13 +61,39 @@ def resolve_period(period: str, work_date: str) -> tuple[str, str, str]:
     return start.isoformat(), end.isoformat(), (period or "daily").lower()
 
 
-def report_rows(period: str, work_date: str) -> tuple[list[dict], str, str, str]:
+def report_rows(period: str, work_date: str, employee_id: str = "") -> tuple[list[dict], str, str, str]:
     db.init_db()
     start, end, kind = resolve_period(period, work_date)
-    return db.list_sessions(date_from=start, date_to=end), start, end, kind
+    return db.list_sessions(date_from=start, date_to=end, employee_id=employee_id or ""), start, end, kind
 
 
-def summarize(rows: list[dict]) -> dict:
+def attach_salary(rows: list[dict], start: str, end: str, *, id_key: str = "employee_id", employee_id: str = "") -> None:
+    """Fill base_salary / net_pay from payroll preview for the same date range."""
+    empty = {"currency": "EGP", "base_salary": "0.00", "net_pay": "0.00", "deductions_total": "0.00", "additions_total": "0.00"}
+    if not rows:
+        return
+    pay_map: dict[str, dict] = {}
+    currency = "EGP"
+    if start and end:
+        try:
+            from core import payroll
+
+            data = payroll.preview(start, end, employee_id=employee_id or "")
+            currency = data.get("currency") or "EGP"
+            for emp in data.get("employees") or []:
+                pay_map[emp.get("employee_id") or ""] = emp
+        except Exception:
+            pay_map = {}
+    for row in rows:
+        hit = pay_map.get(row.get(id_key) or "") or {}
+        row["currency"] = hit.get("currency") or currency
+        row["base_salary"] = hit.get("base_salary") or empty["base_salary"]
+        row["net_pay"] = hit.get("net_pay") or empty["net_pay"]
+        row["additions_total"] = hit.get("additions_total") or empty["additions_total"]
+        row["deductions_total"] = hit.get("deductions_total") or empty["deductions_total"]
+
+
+def summarize(rows: list[dict], start: str = "", end: str = "", employee_id: str = "") -> dict:
     closed = [r for r in rows if r.get("clock_out") and r.get("hours") is not None]
     total = sum(float(r["hours"]) for r in closed)
     by_emp: dict[str, dict] = {}
@@ -87,9 +122,35 @@ def summarize(rows: list[dict]) -> dict:
                 "avg_formatted": format_hours(avg),
             }
         )
-    people.sort(key=lambda x: x["employee_name"].lower())
     n = len(people)
     avg_emp = (total / n) if n else 0.0
+    pay_map: dict[str, dict] = {}
+    currency = "EGP"
+    if start and end:
+        try:
+            from core import payroll
+
+            data = payroll.preview(start, end, employee_id=employee_id or "")
+            currency = data.get("currency") or "EGP"
+            for emp in data.get("employees") or []:
+                pay_map[emp.get("employee_id") or ""] = emp
+        except Exception:
+            pay_map = {}
+    for p in people:
+        hit = pay_map.get(p["employee_id"]) or {}
+        p["currency"] = hit.get("currency") or currency
+        p["base_salary"] = hit.get("base_salary") or "0.00"
+        p["net_pay"] = hit.get("net_pay") or "0.00"
+        p["additions_total"] = hit.get("additions_total") or "0.00"
+        p["deductions_total"] = hit.get("deductions_total") or "0.00"
+    people.sort(key=lambda x: (x.get("employee_name") or "").lower())
+    net_total = 0.0
+    for p in people:
+        try:
+            net_total += float(p.get("net_pay") or 0)
+        except (TypeError, ValueError):
+            pass
+    currency = (people[0].get("currency") if people else "EGP") or "EGP"
     return {
         "sessions": len(rows),
         "closed": len(closed),
@@ -97,6 +158,9 @@ def summarize(rows: list[dict]) -> dict:
         "total_formatted": format_hours(total) if closed else "0:00",
         "avg_hours_per_employee": round(avg_emp, 2),
         "avg_formatted": format_hours(avg_emp) if n else "—",
+        "currency": currency,
+        "net_total": round(net_total, 2),
+        "net_formatted": f"{currency} {net_total:.2f}",
         "employees": people,
     }
 
@@ -113,15 +177,15 @@ def _row_values(r: dict) -> list:
     ]
 
 
-def build_excel(period: str, work_date: str) -> bytes:
-    rows, start, end, kind = report_rows(period, work_date)
-    summary = summarize(rows)
+def build_excel(period: str, work_date: str, employee_id: str = "") -> bytes:
+    rows, start, end, kind = report_rows(period, work_date, employee_id)
+    summary = summarize(rows, start, end, employee_id)
     wb = Workbook()
     ws = wb.active
     ws.title = "Attendance"
     title_font = Font(bold=True, color="FFFFFF", size=14)
     head_font = Font(bold=True, color="FFFFFF")
-    ws.append(["Absence Less", f"{kind.title()} attendance report"])
+    ws.append(["Bunker Attendance", f"{kind.title()} attendance report"])
     ws.merge_cells("A1:B1")
     ws["A1"].font = title_font
     ws["A1"].fill = ORANGE
@@ -145,14 +209,15 @@ def build_excel(period: str, work_date: str) -> bytes:
         for cell in ws[ws.max_row]:
             cell.border = THIN
 
-    if kind == "monthly":
-        avg = wb.create_sheet("Monthly averages")
-        avg.append(["Absence Less", "Average working hours"])
+    if summary["employees"]:
+        avg = wb.create_sheet("Employee summary")
+        avg.append(["Bunker Attendance", "Hours and calculated salary"])
         avg.merge_cells("A1:B1")
         avg["A1"].font = title_font
         avg["A1"].fill = ORANGE
         avg["B1"].fill = ORANGE
         avg.append(["Period", f"{start} to {end}"])
+        avg.append(["Salary", f"{summary.get('currency') or 'EGP'} {summary.get('net_total') or 0:.2f} net"])
         avg.append([])
         avg.append(AVG_HEADERS)
         for cell in avg[avg.max_row]:
@@ -167,6 +232,8 @@ def build_excel(period: str, work_date: str) -> bytes:
                     p["sessions"],
                     p["total_formatted"],
                     p["avg_formatted"],
+                    f"{p.get('currency') or 'EGP'} {p.get('base_salary') or '0.00'}",
+                    f"{p.get('currency') or 'EGP'} {p.get('net_pay') or '0.00'}",
                 ]
             )
         for idx in range(1, avg.max_column + 1):
@@ -183,14 +250,14 @@ def build_excel(period: str, work_date: str) -> bytes:
     return buf.getvalue()
 
 
-def build_pdf(period: str, work_date: str) -> bytes:
-    rows, start, end, kind = report_rows(period, work_date)
-    summary = summarize(rows)
+def build_pdf(period: str, work_date: str, employee_id: str = "") -> bytes:
+    rows, start, end, kind = report_rows(period, work_date, employee_id)
+    summary = summarize(rows, start, end, employee_id)
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
         pagesize=landscape(A4),
-        title=f"Absence Less {kind} attendance",
+        title=f"Bunker Attendance {kind} attendance",
         leftMargin=28,
         rightMargin=28,
         topMargin=28,
@@ -198,20 +265,21 @@ def build_pdf(period: str, work_date: str) -> bytes:
     )
     styles = getSampleStyleSheet()
     story = [
-        Paragraph("Absence Less", styles["Title"]),
+        Paragraph("Bunker Attendance", styles["Title"]),
         Paragraph(
-            f"{kind.title()} attendance · {start} to {end} · Absence Less",
+            f"{kind.title()} attendance · {start} to {end} · Bunker Attendance",
             styles["Normal"],
         ),
         Paragraph(
             f"Closed sessions {summary['closed']} · Total {summary['total_formatted']} · "
-            f"Avg per employee {summary['avg_formatted']}",
+            f"Avg per employee {summary['avg_formatted']} · "
+            f"Net salary {summary.get('net_formatted') or '—'}",
             styles["Normal"],
         ),
         Spacer(1, 12),
     ]
-    if kind == "monthly" and summary["employees"]:
-        story.append(Paragraph("Monthly averages (hours ÷ days worked)", styles["Heading2"]))
+    if summary["employees"]:
+        story.append(Paragraph("Employee summary (hours and calculated salary)", styles["Heading2"]))
         avg_data = [AVG_HEADERS]
         for p in summary["employees"]:
             avg_data.append(
@@ -222,6 +290,8 @@ def build_pdf(period: str, work_date: str) -> bytes:
                     p["sessions"],
                     p["total_formatted"],
                     p["avg_formatted"],
+                    f"{p.get('currency') or 'EGP'} {p.get('base_salary') or '0.00'}",
+                    f"{p.get('currency') or 'EGP'} {p.get('net_pay') or '0.00'}",
                 ]
             )
         avg_table = Table(avg_data, repeatRows=1)
@@ -233,7 +303,7 @@ def build_pdf(period: str, work_date: str) -> bytes:
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                     ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#DDDDDD")),
                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 9),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
                     ("TOPPADDING", (0, 0), (-1, -1), 5),
                     ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
                 ]
@@ -241,7 +311,7 @@ def build_pdf(period: str, work_date: str) -> bytes:
         )
         story.append(avg_table)
         story.append(Spacer(1, 14))
-        story.append(Paragraph("Session log", styles["Heading2"]))
+    story.append(Paragraph("Session log", styles["Heading2"]))
 
     data = [HEADERS]
     status_by_row = [None]
